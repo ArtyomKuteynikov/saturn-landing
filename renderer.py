@@ -99,11 +99,11 @@ def _status_color(value: float, warn: float, crit: float) -> tuple:
 # Buttons
 # ─────────────────────────────────────────────────────────────────────────────
 BUTTONS = [
-    {"id": "drogue",      "label": "DROGUE CHUTE",   "key": "D"},
-    {"id": "main_chute",  "label": "MAIN CHUTE",     "key": "M"},
-    {"id": "jettison",    "label": "HEAT SHIELD",    "key": "J"},
-    {"id": "instruments", "label": "INSTRUMENTS",    "key": "I"},
-    {"id": "restart",     "label": "RESTART",        "key": "R"},
+    {"id": "drogue",      "label": "ТОРМОЗНОЙ ПАРАШЮТ", "key": "D"},
+    {"id": "main_chute",  "label": "ОСНОВНОЙ ПАРАШЮТ",  "key": "M"},
+    {"id": "jettison",    "label": "СБРОС ЩИТА",        "key": "J"},
+    {"id": "instruments", "label": "ПРИБОРЫ",            "key": "I"},
+    {"id": "restart",     "label": "ПЕРЕЗАПУСК",         "key": "R"},
 ]
 _BTN_W, _BTN_H, _BTN_GAP = 215, 32, 6
 
@@ -352,12 +352,12 @@ class Renderer:
 
     def _draw_phase_banner(self, surf: pygame.Surface, state: ProbeState):
         phase_info = {
-            Phase.ENTRY:      ("HYPERSONIC ENTRY",  C_CRIT),
-            Phase.DROGUE:     ("DROGUE DESCENT",    C_WARN),
-            Phase.MAIN_CHUTE: ("MAIN CHUTE DESCENT",C_NOMINAL),
-            Phase.SCIENCE:    ("SCIENCE OPERATIONS",C_OK),
-            Phase.SUCCESS:    ("MISSION COMPLETE",  C_OK),
-            Phase.FAILED:     ("MISSION TERMINATED", C_CRIT),
+            Phase.ENTRY:      ("ГИПЕРЗВУКОВОЙ ВХОД",     C_CRIT),
+            Phase.DROGUE:     ("ТОРМОЗНОЙ ПАРАШЮТ",      C_WARN),
+            Phase.MAIN_CHUTE: ("ОСНОВНОЙ ПАРАШЮТ",       C_NOMINAL),
+            Phase.SCIENCE:    ("НАУЧНЫЕ ОПЕРАЦИИ",       C_OK),
+            Phase.SUCCESS:    ("МИССИЯ ВЫПОЛНЕНА",       C_OK),
+            Phase.FAILED:     ("МИССИЯ ПРЕРВАНА",        C_CRIT),
         }
         text, col = phase_info.get(state.phase, ("", C_BRIGHT))
         if not text:
@@ -381,94 +381,95 @@ class Renderer:
 
         # Title bar
         pygame.draw.rect(surf, (12, 18, 30), pygame.Rect(HUD_X, 0, HUD_W, 26))
-        t = self.f_head.render("SATURN ATMOSPHERIC ENTRY PROBE  //  TELEMETRY", True, C_AMBER)
+        t = self.f_head.render("АТМОСФЕРНЫЙ ЗОНД САТУРНА  //  ТЕЛЕМЕТРИЯ", True, C_AMBER)
         surf.blit(t, (mid - t.get_width() // 2, 6))
 
         y = 30
-        y = self._section(surf, y, x0, x1, "NAVIGATION")
-        y = self._trow(surf, y, x0, x1, "ALTITUDE",
-                       f"{state.altitude_km:+9.2f} km", C_CYAN)
-        y = self._trow(surf, y, x0, x1, "VERT VELOCITY",
-                       f"{state.velocity_ms:9.1f} m/s",
+        y = self._section(surf, y, x0, x1, "НАВИГАЦИЯ")
+        y = self._trow(surf, y, x0, x1, "ВЫСОТА",
+                       f"{state.altitude_km:+9.2f} км", C_CYAN)
+        y = self._trow(surf, y, x0, x1, "СКОР. СНИЖЕНИЯ",
+                       f"{state.velocity_ms:9.1f} м/с",
                        _status_color(state.velocity_ms, 5000, 15000))
-        y = self._trow(surf, y, x0, x1, "HORIZ VELOCITY",
-                       f"{state.horiz_velocity:8.1f} m/s", C_BRIGHT)
-        y = self._trow(surf, y, x0, x1, "HORIZ DRIFT",
-                       f"{state.horiz_position_km:+7.2f} km", C_DIM)
-        y = self._trow(surf, y, x0, x1, "ELAPSED",
+        y = self._trow(surf, y, x0, x1, "ГОРИЗОНТ. СКОР.",
+                       f"{state.horiz_velocity:8.1f} м/с", C_BRIGHT)
+        y = self._trow(surf, y, x0, x1, "СНОС",
+                       f"{state.horiz_position_km:+7.2f} км", C_DIM)
+        y = self._trow(surf, y, x0, x1, "ВРЕМЯ ПОЛЁТА",
                        self._fmt_time(state.elapsed_s), C_BRIGHT)
         y += 3
 
-        y = self._section(surf, y, x0, x1, "ATMOSPHERIC CONDITIONS")
-        y = self._trow(surf, y, x0, x1, "PRESSURE",
-                       f"{state.pressure_bar:10.4f} bar",
+        y = self._section(surf, y, x0, x1, "АТМОСФЕРНЫЕ УСЛОВИЯ")
+        y = self._trow(surf, y, x0, x1, "ДАВЛЕНИЕ",
+                       f"{state.pressure_bar:10.4f} бар",
                        _status_color(state.pressure_bar,
                                      config.target_pressure_bar * 0.5,
                                      config.max_pressure_bar * 0.8))
-        y = self._trow(surf, y, x0, x1, "TEMPERATURE",
-                       f"{state.temperature_k:8.1f} K",
+        y = self._trow(surf, y, x0, x1, "ТЕМПЕРАТУРА",
+                       f"{state.temperature_k:8.1f} К",
                        _status_color(state.temperature_k,
                                      config.max_temperature_k * 0.6,
                                      config.max_temperature_k * 0.9))
-        y = self._trow(surf, y, x0, x1, "DENSITY",
-                       f"{state.density:.3e} kg/m³", C_DIM)
-        y = self._trow(surf, y, x0, x1, "WIND SPEED",
-                       f"{state.wind_speed:7.1f} m/s", C_DIM)
+        y = self._trow(surf, y, x0, x1, "ПЛОТНОСТЬ",
+                       f"{state.density:.3e} кг/м³", C_DIM)
+        y = self._trow(surf, y, x0, x1, "СКОР. ВЕТРА",
+                       f"{state.wind_speed:7.1f} м/с", C_DIM)
         y += 3
 
-        y = self._section(surf, y, x0, x1, "PROBE DYNAMICS")
+        y = self._section(surf, y, x0, x1, "ДИНАМИКА ЗОНДА")
         g_col = _status_color(state.gload, 30, 70)
-        y = self._trow(surf, y, x0, x1, "G-LOAD",
+        y = self._trow(surf, y, x0, x1, "ПЕРЕГРУЗКА",
                        f"{state.gload:9.2f} g", g_col)
-        self._bar(surf, y - 13, x0, x1, state.gload / config.max_gload, g_col)
-        y += 2
-        y = self._trow(surf, y, x0, x1, "HEAT FLUX",
-                       f"{max(0,state.heat_flux):.2e} W/m²",
+        # Bar drawn BELOW the text row, before next item
+        self._bar(surf, y + 1, x0, x1, state.gload / config.max_gload, g_col)
+        y += 9
+        y = self._trow(surf, y, x0, x1, "ТЕПЛОВОЙ ПОТОК",
+                       f"{max(0,state.heat_flux):.2e} Вт/м²",
                        C_WARN if state.heat_flux > 1e6 else C_DIM)
         y += 3
 
         # Science progress (only when active)
         if state.phase == Phase.SCIENCE:
-            y = self._section(surf, y, x0, x1, "SCIENCE DATA LINK")
+            y = self._section(surf, y, x0, x1, "ПЕРЕДАЧА ДАННЫХ")
             pct = min(1.0, state.science_data_s / config.science_duration_s)
-            self._bar(surf, y + 2, x0, x1, pct, C_OK, label=f"{pct*100:.0f}%")
-            y += 18
-            y = self._trow(surf, y, x0, x1, "TRANSMITTED",
+            y = self._trow(surf, y, x0, x1, "ПЕРЕДАНО",
                            self._fmt_time(state.science_data_s), C_OK)
+            self._bar(surf, y + 1, x0, x1, pct, C_OK, label=f"{pct*100:.0f}%")
+            y += 9
             required = self._fmt_time(config.science_duration_s)
-            y = self._trow(surf, y, x0, x1, "REQUIRED",
+            y = self._trow(surf, y, x0, x1, "ТРЕБУЕТСЯ",
                            required, C_DIM)
             y += 3
 
-        y = self._section(surf, y, x0, x1, "SYSTEMS")
-        y = self._sysrow(surf, y, x0, "HEAT SHIELD",
-                         state.heat_shield_on, "ACTIVE", "JETTISONED")
-        y = self._sysrow(surf, y, x0, "DROGUE CHUTE",
-                         state.drogue_deployed, "DEPLOYED", "STOWED")
-        y = self._sysrow(surf, y, x0, "MAIN CHUTE",
-                         state.main_chute_deployed, "DEPLOYED", "STOWED")
-        y = self._sysrow(surf, y, x0, "INSTRUMENTS",
-                         state.instruments_on, "ACTIVE", "STANDBY")
+        y = self._section(surf, y, x0, x1, "СИСТЕМЫ")
+        y = self._sysrow(surf, y, x0, "ТЕПЛОВОЙ ЩИТ",
+                         state.heat_shield_on, "АКТИВЕН", "СБРОШЕН")
+        y = self._sysrow(surf, y, x0, "ТОРМОЗНОЙ ПАР.",
+                         state.drogue_deployed, "РАСКРЫТ", "УБРАН")
+        y = self._sysrow(surf, y, x0, "ОСНОВНОЙ ПАР.",
+                         state.main_chute_deployed, "РАСКРЫТ", "УБРАН")
+        y = self._sysrow(surf, y, x0, "ПРИБОРЫ",
+                         state.instruments_on, "АКТИВНЫ", "ОЖИДАНИЕ")
         y += 3
 
-        y = self._section(surf, y, x0, x1, "PEAK RECORDED")
-        y = self._trow(surf, y, x0, x1, "PEAK G-LOAD",
+        y = self._section(surf, y, x0, x1, "ПИКОВЫЕ ЗНАЧЕНИЯ")
+        y = self._trow(surf, y, x0, x1, "МАКС. ПЕРЕГРУЗКА",
                        f"{state.peak_gload:.2f} g", C_DIM)
-        y = self._trow(surf, y, x0, x1, "PEAK TEMP",
-                       f"{state.peak_temperature:.0f} K", C_DIM)
-        y = self._trow(surf, y, x0, x1, "PEAK PRESSURE",
-                       f"{state.peak_pressure:.3f} bar", C_DIM)
+        y = self._trow(surf, y, x0, x1, "МАКС. ТЕМПЕРАТУРА",
+                       f"{state.peak_temperature:.0f} К", C_DIM)
+        y = self._trow(surf, y, x0, x1, "МАКС. ДАВЛЕНИЕ",
+                       f"{state.peak_pressure:.3f} бар", C_DIM)
         y += 3
 
-        y = self._section(surf, y, x0, x1, "EVENT LOG")
+        y = self._section(surf, y, x0, x1, "ЖУРНАЛ СОБЫТИЙ")
         for msg in messages[-5:]:
-            if "FAIL" in msg.upper():
+            if "ОТКАЗ" in msg or "РАЗРУШ" in msg or "СБРОС" in msg.upper() or "FAILURE" in msg.upper():
                 col = C_CRIT
-            elif "SUCCESS" in msg.upper() or "AUTO" in msg.upper():
+            elif "УСПЕХ" in msg or "АВТО" in msg or "РАСКРЫТ" in msg or "AUTO" in msg.upper():
                 col = C_OK
             else:
                 col = (100, 118, 135)
-            lbl = self.f_small.render(msg[:36], True, col)
+            lbl = self.f_small.render(msg[:40], True, col)
             surf.blit(lbl, (x0, y))
             y += 14
 
@@ -479,7 +480,7 @@ class Renderer:
         if state.phase == Phase.FAILED and state.failure_reason:
             self._draw_terminal_msg(state.failure_reason.value, C_CRIT)
         elif state.phase == Phase.SUCCESS:
-            self._draw_terminal_msg("MISSION SUCCESS — DATA TRANSMITTED", C_OK)
+            self._draw_terminal_msg("МИССИЯ ВЫПОЛНЕНА — ДАННЫЕ ПЕРЕДАНЫ", C_OK)
 
     # ─── HUD helpers ─────────────────────────────────────────────────────────
 

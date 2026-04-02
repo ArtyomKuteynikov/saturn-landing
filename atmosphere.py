@@ -99,9 +99,9 @@ _wind_speed = [r[1] for r in _WIND_PROFILE]
 
 # Cloud layer definitions for renderer
 CLOUD_LAYERS = [
-    {"name": "Ammonia ice clouds",       "alt_km":  -10, "color": (220, 200, 160), "thickness_km": 30},
-    {"name": "Ammonium hydrosulfide",    "alt_km":  -50, "color": (180, 140, 100), "thickness_km": 30},
-    {"name": "Water clouds",             "alt_km":  -80, "color": (160, 180, 200), "thickness_km": 40},
+    {"name": "Облака аммиака",           "alt_km":  -10, "color": (220, 200, 160), "thickness_km": 30},
+    {"name": "Гидросульфид аммония",     "alt_km":  -50, "color": (180, 140, 100), "thickness_km": 30},
+    {"name": "Водяные облака",           "alt_km":  -80, "color": (160, 180, 200), "thickness_km": 40},
 ]
 
 

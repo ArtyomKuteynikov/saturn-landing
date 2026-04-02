@@ -53,60 +53,60 @@ class ParamDef:
 # ---------------------------------------------------------------------------
 PARAM_SECTIONS = [
     {
-        "title": "ENTRY CONDITIONS",
+        "title": "УСЛОВИЯ ВХОДА",
         "params": [
-            ParamDef("entry_speed_kms", "Entry Speed",    "km/s",
+            ParamDef("entry_speed_kms", "Скорость входа",  "км/с",
                      min_val=24.0, max_val=35.0, default=29.5, step=0.5, fmt=".1f",
-                     desc="Probe speed at atmospheric interface (~400 km)"),
-            ParamDef("entry_angle_deg", "Entry Angle",    "deg",
+                     desc="Скорость зонда на границе атмосферы (~400 км)"),
+            ParamDef("entry_angle_deg", "Угол входа",      "°",
                      min_val=5.0,  max_val=35.0, default=15.0, step=0.5, fmt=".1f",
-                     desc="Angle below horizontal at entry (shallow=gentle, steep=hot)"),
+                     desc="Угол ниже горизонта при входе (мелкий=плавный, крутой=горячий)"),
         ],
     },
     {
-        "title": "PROBE GEOMETRY",
+        "title": "ГЕОМЕТРИЯ ЗОНДА",
         "params": [
-            ParamDef("mass_kg",          "Probe Mass",      "kg",
+            ParamDef("mass_kg",             "Масса зонда",     "кг",
                      min_val=200.0, max_val=600.0, default=340.0, step=10.0, fmt=".0f",
-                     desc="Total probe mass including heat shield"),
-            ParamDef("cone_radius_m",    "Cone Radius",     "m",
+                     desc="Полная масса зонда включая тепловой щит"),
+            ParamDef("cone_radius_m",       "Радиус конуса",   "м",
                      min_val=0.4,  max_val=2.5,  default=0.9,  step=0.05, fmt=".2f",
-                     desc="Base radius of entry capsule (frontal area = π·r²)"),
-            ParamDef("cone_half_angle_deg", "Cone Half-Angle", "deg",
+                     desc="Радиус основания капсулы (площадь миделя = π·r²)"),
+            ParamDef("cone_half_angle_deg", "Полуугол конуса", "°",
                      min_val=15.0, max_val=75.0, default=45.0, step=1.0,  fmt=".0f",
-                     desc="Half-angle of nose cone (blunter = more drag + more heat)"),
+                     desc="Полуугол носового конуса (тупее = больше торможения и нагрева)"),
         ],
     },
     {
-        "title": "PARACHUTE SYSTEM",
+        "title": "ПАРАШЮТНАЯ СИСТЕМА",
         "params": [
-            ParamDef("num_parachutes",   "Parachutes",      "",
+            ParamDef("num_parachutes",      "Кол-во парашютов","",
                      min_val=1.0,  max_val=2.0,  default=2.0,  step=1.0,  fmt=".0f",
                      integer=True,
-                     desc="1 = main chute only · 2 = drogue + main chute"),
-            ParamDef("drogue_area_m2",   "Drogue Area",     "m²",
+                     desc="1 = только основной · 2 = тормозной + основной"),
+            ParamDef("drogue_area_m2",      "Площадь торм.",   "м²",
                      min_val=1.0,  max_val=10.0, default=2.5,  step=0.5,  fmt=".1f",
-                     desc="Drogue canopy area (active only if 2 parachutes)"),
-            ParamDef("main_chute_area_m2","Main Chute Area","m²",
+                     desc="Площадь купола тормозного парашюта (только при 2 парашютах)"),
+            ParamDef("main_chute_area_m2",  "Площадь осн.",    "м²",
                      min_val=5.0,  max_val=50.0, default=20.0, step=1.0,  fmt=".0f",
-                     desc="Main parachute canopy area"),
-            ParamDef("auto_drogue_ms",   "Drogue Deploy",   "m/s",
+                     desc="Площадь купола основного парашюта"),
+            ParamDef("auto_drogue_ms",      "Раскрытие торм.", "м/с",
                      min_val=100.0, max_val=3000.0, default=600.0, step=50.0, fmt=".0f",
-                     desc="Auto-deploy drogue when speed drops below this"),
-            ParamDef("auto_main_ms",     "Main Deploy",     "m/s",
+                     desc="Авто-раскрытие тормозного при снижении скорости ниже порога"),
+            ParamDef("auto_main_ms",        "Раскрытие осн.",  "м/с",
                      min_val=30.0,  max_val=500.0, default=150.0, step=10.0, fmt=".0f",
-                     desc="Auto-deploy main chute when speed drops below this"),
+                     desc="Авто-раскрытие основного при снижении скорости ниже порога"),
         ],
     },
     {
-        "title": "MISSION TARGETS",
+        "title": "ЦЕЛИ МИССИИ",
         "params": [
-            ParamDef("target_pressure_bar", "Target Pressure", "bar",
+            ParamDef("target_pressure_bar", "Цел. давление",   "бар",
                      min_val=5.0,  max_val=100.0, default=10.0, step=5.0,  fmt=".0f",
-                     desc="Mission success: survive to this pressure"),
-            ParamDef("science_duration_s",  "Science Time",    "min",
+                     desc="Успех миссии: выжить и достичь этого давления"),
+            ParamDef("science_duration_s",  "Время науки",     "мин",
                      min_val=5.0,  max_val=120.0, default=30.0, step=5.0,  fmt=".0f",
-                     desc="Minutes of science data required for full success"),
+                     desc="Минут передачи научных данных для полного успеха"),
         ],
     },
 ]
@@ -302,7 +302,7 @@ class ConfigScreen:
         pygame.draw.rect(screen, (8, 12, 22), pygame.Rect(0, 0, SCREEN_W, 36))
         pygame.draw.line(screen, C_BORDER, (0, 36), (SCREEN_W, 36), 1)
         title = self.font_title.render(
-            "SATURN ATMOSPHERE DESCENT SIMULATOR  //  MISSION PARAMETER CONFIGURATION",
+            "СИМУЛЯТОР СПУСКА В АТМОСФЕРУ САТУРНА  //  ПАРАМЕТРЫ МИССИИ",
             True, C_TITLE)
         screen.blit(title, (SCREEN_W // 2 - title.get_width() // 2, 10))
 
@@ -362,7 +362,7 @@ class ConfigScreen:
         border_col = C_VALUE if btn_hov else C_SECTION
         pygame.draw.rect(screen, C_BTN_HOV if btn_hov else C_BTN_BG, self.launch_rect)
         pygame.draw.rect(screen, border_col, self.launch_rect, 1)
-        btn_lbl = self.font_title.render("[ LAUNCH MISSION ]   Enter ↵", True, C_BTN_TXT)
+        btn_lbl = self.font_title.render("[ ЗАПУСТИТЬ МИССИЮ ]   Enter ↵", True, C_BTN_TXT)
         screen.blit(btn_lbl,
                     (self.launch_rect.centerx - btn_lbl.get_width() // 2,
                      self.launch_rect.centery - btn_lbl.get_height() // 2))
@@ -372,7 +372,7 @@ class ConfigScreen:
         m_val = self.sliders.get("auto_main_ms")
         if d_val and m_val and d_val.value <= m_val.value:
             warn = self.font_desc.render(
-                "WARNING: Drogue deploy speed should be greater than main chute speed!", True, C_WARN)
+                "ВНИМАНИЕ: скорость раскрытия тормозного должна быть больше основного!", True, C_WARN)
             screen.blit(warn, (SCREEN_W // 2 - warn.get_width() // 2, SCREEN_H - 82))
 
         pygame.display.flip()

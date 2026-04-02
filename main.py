@@ -62,21 +62,21 @@ def handle_action(action_id: str,
     if action_id == "drogue":
         err = state.deploy_drogue(config)
         if err is None and state.drogue_deployed:
-            messages.append(f"Drogue deployed at {state.velocity_ms:.0f} m/s")
+            messages.append(f"Тормозной пар. раскрыт при {state.velocity_ms:.0f} м/с")
 
     elif action_id == "main_chute":
         err = state.deploy_main_chute(config)
         if err is None:
-            messages.append(f"Main chute deployed at {state.velocity_ms:.0f} m/s")
+            messages.append(f"Осн. парашют раскрыт при {state.velocity_ms:.0f} м/с")
 
     elif action_id == "jettison":
         err = state.jettison_heat_shield()
         if err is None:
-            messages.append("Heat shield jettisoned")
+            messages.append("Тепловой щит сброшен")
 
     elif action_id == "instruments":
         state.toggle_instruments()
-        messages.append("Instruments " + ("ON" if state.instruments_on else "OFF"))
+        messages.append("Приборы " + ("ВКЛЮЧЕНЫ" if state.instruments_on else "ВЫКЛЮЧЕНЫ"))
 
     if err:
         messages.append(err)
@@ -98,9 +98,9 @@ def run_simulation(screen: pygame.Surface,
     clock    = pygame.time.Clock()
     state    = ProbeState.from_config(config)
     messages: list[str] = [
-        f"Entry: {config.entry_speed_ms/1000:.1f} km/s  "
-        f"angle {config.entry_angle_deg:.1f}°",
-        f"Cd={config.cd_shield:.2f}  A={config.frontal_area_m2:.2f} m²",
+        f"Вход: {config.entry_speed_ms/1000:.1f} км/с  "
+        f"угол {config.entry_angle_deg:.1f}°",
+        f"Cd={config.cd_shield:.2f}  S={config.frontal_area_m2:.2f} м²",
     ]
     physics_acc = 0.0
 
@@ -152,14 +152,14 @@ def run_simulation(screen: pygame.Surface,
             # One-shot terminal messages
             if state.phase == Phase.SCIENCE and state.science_data_s < DT * 2:
                 messages.append(
-                    f"Science phase! {config.target_pressure_bar:.0f} bar reached.")
+                    f"Науч. фаза! Достигнуто {config.target_pressure_bar:.0f} бар")
             if state.phase == Phase.FAILED:
-                reason = state.failure_reason.value if state.failure_reason else "Unknown"
-                if not any("FAILURE" in m.upper() for m in messages[-3:]):
-                    messages.append(f"FAILURE: {reason}")
+                reason = state.failure_reason.value if state.failure_reason else "Неизвестно"
+                if not any(reason[:15] in m for m in messages[-3:]):
+                    messages.append(f"ОТКАЗ: {reason}")
             if state.phase == Phase.SUCCESS:
-                if not any("SUCCESS" in m.upper() for m in messages[-3:]):
-                    messages.append("MISSION SUCCESS! Data transmitted.")
+                if not any("УСПЕХ" in m for m in messages[-3:]):
+                    messages.append("УСПЕХ: данные переданы на Землю!")
 
         # --- Render ---
         renderer.draw(state, config, messages)

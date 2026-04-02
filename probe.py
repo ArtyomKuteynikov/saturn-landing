@@ -26,11 +26,11 @@ class Phase(Enum):
 
 
 class FailureReason(Enum):
-    OVERHEAT     = "Overheating: temperature exceeded structural limit"
-    OVERPRESSURE = "Over-pressure: exceeded 100 bar"
-    GLOAD        = "Structural failure: g-load exceeded limit"
-    CHUTE_FAIL   = "Parachute failure: deployed at hypersonic speed"
-    SHIELD_FAIL  = "Heat shield jettisoned at unsafe speed"
+    OVERHEAT     = "Перегрев: температура превысила допустимый предел"
+    OVERPRESSURE = "Превышение давления: более 100 бар"
+    GLOAD        = "Разрушение конструкции: перегрузка превысила лимит"
+    CHUTE_FAIL   = "Отказ парашюта: раскрытие на гиперзвуковой скорости"
+    SHIELD_FAIL  = "Тепловой щит сброшен на опасной скорости"
 
 
 # ---------------------------------------------------------------------------
@@ -188,11 +188,11 @@ class ProbeState:
     # ------------------------------------------------------------------
     def deploy_drogue(self, config: "ProbeConfig") -> Optional[str]:
         if not self.is_alive():
-            return "Mission already ended"
+            return "Миссия уже завершена"
         if self.drogue_deployed:
-            return "Drogue already deployed"
+            return "Тормозной парашют уже раскрыт"
         if config.num_parachutes < 2:
-            return "No drogue chute in this configuration"
+            return "Тормозной парашют не предусмотрен"
         # Catastrophic failure if still hypersonic
         if self.velocity_ms > config.auto_deploy_drogue_ms * 2.5:
             self.failure_reason = FailureReason.CHUTE_FAIL
@@ -206,11 +206,11 @@ class ProbeState:
 
     def deploy_main_chute(self, config: "ProbeConfig") -> Optional[str]:
         if not self.is_alive():
-            return "Mission already ended"
+            return "Миссия уже завершена"
         if self.main_chute_deployed:
-            return "Main chute already deployed"
+            return "Основной парашют уже раскрыт"
         if config.num_parachutes >= 2 and not self.drogue_deployed:
-            return "Deploy drogue first"
+            return "Сначала раскройте тормозной парашют"
         if self.velocity_ms > config.auto_deploy_main_ms * 4:
             self.failure_reason = FailureReason.CHUTE_FAIL
             self.phase = Phase.FAILED
@@ -222,7 +222,7 @@ class ProbeState:
 
     def jettison_heat_shield(self) -> Optional[str]:
         if not self.heat_shield_on:
-            return "Heat shield already jettisoned"
+            return "Тепловой щит уже сброшен"
         if self.velocity_ms > 3000:
             self.failure_reason = FailureReason.SHIELD_FAIL
             self.phase = Phase.FAILED
@@ -232,7 +232,7 @@ class ProbeState:
 
     def toggle_instruments(self) -> Optional[str]:
         if not self.is_alive():
-            return "Mission ended"
+            return "Миссия завершена"
         self.instruments_on = not self.instruments_on
         return None
 

@@ -113,8 +113,8 @@ def _check_auto_deploy(state: ProbeState, config: ProbeConfig) -> list[str]:
             and state.velocity_ms > 0):
         err = state.deploy_drogue(config)
         if err is None:
-            events.append(f"AUTO: Drogue deployed at {state.velocity_ms:.0f} m/s")
-        elif "FAILURE" in (err or ""):
+            events.append(f"АВТО: Тормозной пар. раскрыт при {state.velocity_ms:.0f} м/с")
+        elif err:
             events.append(err)
 
     # Auto main chute
@@ -125,8 +125,8 @@ def _check_auto_deploy(state: ProbeState, config: ProbeConfig) -> list[str]:
             and (config.num_parachutes < 2 or state.drogue_deployed)):
         err = state.deploy_main_chute(config)
         if err is None:
-            events.append(f"AUTO: Main chute deployed at {state.velocity_ms:.0f} m/s")
-        elif "FAILURE" in (err or ""):
+            events.append(f"АВТО: Осн. парашют раскрыт при {state.velocity_ms:.0f} м/с")
+        elif err:
             events.append(err)
 
     return events
