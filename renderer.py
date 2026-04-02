@@ -8,7 +8,9 @@ Layout:
 
 import math
 import random
+
 import pygame
+
 import atmosphere as atm
 from probe import ProbeState, ProbeConfig, Phase
 
