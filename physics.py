@@ -18,11 +18,12 @@ vertical speed drops below the configured thresholds.
 """
 
 import math
+
 import atmosphere as atm
 from probe import ProbeState, ProbeConfig, Phase
 
-DT = 0.05           # integration step, seconds
-G_EARTH = 9.81      # m/s² — for g-load conversion
+DT = 0.05  # integration step, seconds
+G_EARTH = 9.81  # m/s² — for g-load conversion
 
 _HEAT_COEFF = 1.0e-9  # empirical constant for heat flux display
 
@@ -39,27 +40,27 @@ def step(state: ProbeState, config: ProbeConfig) -> list[str]:
     alt_km = state.altitude_km
 
     # --- Atmospheric properties at current altitude ---
-    rho    = atm.get_density(alt_km)
-    T      = atm.get_temperature(alt_km)
-    P      = atm.get_pressure(alt_km)
+    rho = atm.get_density(alt_km)
+    T = atm.get_temperature(alt_km)
+    P = atm.get_pressure(alt_km)
     v_wind = atm.get_wind_speed(alt_km)
 
-    state.density       = rho
+    state.density = rho
     state.temperature_k = T
-    state.pressure_bar  = P
-    state.wind_speed    = v_wind
+    state.pressure_bar = P
+    state.wind_speed = v_wind
 
     # Track peaks
     if T > state.peak_temperature: state.peak_temperature = T
-    if P > state.peak_pressure:    state.peak_pressure    = P
+    if P > state.peak_pressure:    state.peak_pressure = P
 
     # --- Drag parameters ---
     cd, area = state.effective_cd_area(config)
 
     # --- Vertical forces ---
-    v_vert  = state.velocity_ms
+    v_vert = state.velocity_ms
     f_drag_vert = 0.5 * rho * cd * area * v_vert ** 2  # always opposes descent
-    a_vert  = atm.GRAVITY - f_drag_vert / config.mass_kg
+    a_vert = atm.GRAVITY - f_drag_vert / config.mass_kg
 
     # --- G-load (deceleration felt by structure) ---
     decel = abs(f_drag_vert / config.mass_kg)
@@ -77,11 +78,11 @@ def step(state: ProbeState, config: ProbeConfig) -> list[str]:
     a_horiz = f_drag_horiz / config.mass_kg
 
     # --- Integrate ---
-    state.velocity_ms    += a_vert  * DT
+    state.velocity_ms += a_vert * DT
     state.horiz_velocity += a_horiz * DT
-    state.velocity_ms     = max(state.velocity_ms, 0.0)
+    state.velocity_ms = max(state.velocity_ms, 0.0)
 
-    state.altitude_km     -= state.velocity_ms    * DT / 1000.0
+    state.altitude_km -= state.velocity_ms * DT / 1000.0
     state.horiz_position_km += state.horiz_velocity * DT / 1000.0
 
     # --- Auto-deploy parachutes ---

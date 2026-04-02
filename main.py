@@ -23,12 +23,13 @@ Data sources:
 """
 
 import sys
+
 import pygame
 
-from probe import ProbeState, ProbeConfig, Phase
-from physics import step, DT
-from renderer import Renderer, SCREEN_W, SCREEN_H
 from config_screen import ConfigScreen
+from physics import step, DT
+from probe import ProbeState, ProbeConfig, Phase
+from renderer import Renderer, SCREEN_W, SCREEN_H
 
 # ---------------------------------------------------------------------------
 # Simulation speed
@@ -40,7 +41,7 @@ TARGET_FPS = 60
 #   Slow near parachute phase to enjoy the view
 STEPS_FAST = 200
 STEPS_SLOW = 10
-SLOW_THRESHOLD_MS = 800.0   # switch to slow mode below this vertical speed
+SLOW_THRESHOLD_MS = 800.0  # switch to slow mode below this vertical speed
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +56,7 @@ def handle_action(action_id: str,
     (caller handles the restart loop).
     """
     if action_id == "restart":
-        return True   # signal to caller
+        return True  # signal to caller
 
     err = None
 
@@ -95,10 +96,10 @@ def run_simulation(screen: pygame.Surface,
     Returns False → quit
     """
     renderer = Renderer(screen)
-    clock    = pygame.time.Clock()
-    state    = ProbeState.from_config(config)
+    clock = pygame.time.Clock()
+    state = ProbeState.from_config(config)
     messages: list[str] = [
-        f"Вход: {config.entry_speed_ms/1000:.1f} км/с  "
+        f"Вход: {config.entry_speed_ms / 1000:.1f} км/с  "
         f"угол {config.entry_angle_deg:.1f}°",
         f"Cd={config.cd_shield:.2f}  S={config.frontal_area_m2:.2f} м²",
     ]
@@ -114,12 +115,12 @@ def run_simulation(screen: pygame.Surface,
 
             elif event.type == pygame.KEYDOWN:
                 key_map = {
-                    pygame.K_d:      "drogue",
-                    pygame.K_m:      "main_chute",
-                    pygame.K_j:      "jettison",
-                    pygame.K_i:      "instruments",
-                    pygame.K_r:      "restart",
-                    pygame.K_q:      "quit",
+                    pygame.K_d: "drogue",
+                    pygame.K_m: "main_chute",
+                    pygame.K_j: "jettison",
+                    pygame.K_i: "instruments",
+                    pygame.K_r: "restart",
+                    pygame.K_q: "quit",
                     pygame.K_ESCAPE: "quit",
                 }
                 action = key_map.get(event.key)
@@ -127,7 +128,7 @@ def run_simulation(screen: pygame.Surface,
                     return False
                 elif action:
                     if handle_action(action, state, config, messages):
-                        return True   # restart
+                        return True  # restart
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 btn_id = renderer.get_button_at(event.pos)
@@ -147,7 +148,7 @@ def run_simulation(screen: pygame.Surface,
                 messages.extend(new_events)
 
             physics_acc -= steps_this_frame * DT
-            physics_acc  = max(0.0, physics_acc)
+            physics_acc = max(0.0, physics_acc)
 
             # One-shot terminal messages
             if state.phase == Phase.SCIENCE and state.science_data_s < DT * 2:
@@ -178,14 +179,14 @@ def main():
         cfg_screen = ConfigScreen()
         params = cfg_screen.run(screen)
         if params is None:
-            break   # user quit on config screen
+            break  # user quit on config screen
 
         config = ProbeConfig.from_dict(params)
 
         # --- Simulation ---
         restart = run_simulation(screen, config)
         if not restart:
-            break   # user quit
+            break  # user quit
 
     pygame.quit()
     sys.exit()

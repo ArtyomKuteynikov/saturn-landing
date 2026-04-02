@@ -17,20 +17,20 @@ from typing import Optional
 
 
 class Phase(Enum):
-    ENTRY       = auto()
-    DROGUE      = auto()
-    MAIN_CHUTE  = auto()
-    SCIENCE     = auto()
-    SUCCESS     = auto()
-    FAILED      = auto()
+    ENTRY = auto()
+    DROGUE = auto()
+    MAIN_CHUTE = auto()
+    SCIENCE = auto()
+    SUCCESS = auto()
+    FAILED = auto()
 
 
 class FailureReason(Enum):
-    OVERHEAT     = "Перегрев: температура превысила допустимый предел"
+    OVERHEAT = "Перегрев: температура превысила допустимый предел"
     OVERPRESSURE = "Превышение давления: более 100 бар"
-    GLOAD        = "Разрушение конструкции: перегрузка превысила лимит"
-    CHUTE_FAIL   = "Отказ парашюта: раскрытие на гиперзвуковой скорости"
-    SHIELD_FAIL  = "Тепловой щит сброшен на опасной скорости"
+    GLOAD = "Разрушение конструкции: перегрузка превысила лимит"
+    CHUTE_FAIL = "Отказ парашюта: раскрытие на гиперзвуковой скорости"
+    SHIELD_FAIL = "Тепловой щит сброшен на опасной скорости"
 
 
 # ---------------------------------------------------------------------------
@@ -39,35 +39,35 @@ class FailureReason(Enum):
 @dataclass
 class ProbeConfig:
     # --- Entry conditions (set from config screen) ---
-    entry_speed_ms:      float = 29_500.0  # m/s — speed at atmospheric interface
-    entry_angle_deg:     float = 15.0      # degrees below horizontal
+    entry_speed_ms: float = 29_500.0  # m/s — speed at atmospheric interface
+    entry_angle_deg: float = 15.0  # degrees below horizontal
 
     # --- Geometry ---
-    mass_kg:             float = 340.0     # kg
-    cone_radius_m:       float = 0.9       # m — base radius of capsule
-    cone_half_angle_deg: float = 45.0      # degrees — half-angle of nose cone
+    mass_kg: float = 340.0  # kg
+    cone_radius_m: float = 0.9  # m — base radius of capsule
+    cone_half_angle_deg: float = 45.0  # degrees — half-angle of nose cone
 
     # --- Parachute system ---
-    num_parachutes:      int   = 2         # 1 = main only; 2 = drogue + main
-    drogue_area_m2:      float = 2.5       # m²
-    main_chute_area_m2:  float = 20.0      # m²
-    auto_deploy_drogue_ms: float = 600.0   # m/s — auto-deploy drogue below this speed
-    auto_deploy_main_ms:   float = 150.0   # m/s — auto-deploy main chute below this speed
+    num_parachutes: int = 2  # 1 = main only; 2 = drogue + main
+    drogue_area_m2: float = 2.5  # m²
+    main_chute_area_m2: float = 20.0  # m²
+    auto_deploy_drogue_ms: float = 600.0  # m/s — auto-deploy drogue below this speed
+    auto_deploy_main_ms: float = 150.0  # m/s — auto-deploy main chute below this speed
 
     # --- Mission targets ---
-    target_pressure_bar: float = 10.0      # bar — science phase begins here
-    science_duration_s:  float = 1800.0    # seconds of data transmission required
+    target_pressure_bar: float = 10.0  # bar — science phase begins here
+    science_duration_s: float = 1800.0  # seconds of data transmission required
 
     # --- Critical limits ---
-    max_temperature_k:   float = 500.0     # K — operational limit (no shield)
-    max_pressure_bar:    float = 100.0     # bar
-    max_gload:           float = 100.0     # g
+    max_temperature_k: float = 500.0  # K — operational limit (no shield)
+    max_pressure_bar: float = 100.0  # bar
+    max_gload: float = 100.0  # g
 
     # --- Derived (computed in __post_init__) ---
-    frontal_area_m2:     float = field(init=False)
-    cd_shield:           float = field(init=False)
-    cd_drogue:           float = field(init=False)
-    cd_main:             float = field(init=False)
+    frontal_area_m2: float = field(init=False)
+    cd_shield: float = field(init=False)
+    cd_drogue: float = field(init=False)
+    cd_main: float = field(init=False)
 
     def __post_init__(self):
         self._recompute()
@@ -85,25 +85,25 @@ class ProbeConfig:
 
         # With drogue/main chute: reduced body drag (canopy dominates)
         self.cd_drogue = 0.6
-        self.cd_main   = 0.5
+        self.cd_main = 0.5
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProbeConfig":
         """Build config from config_screen parameter dict."""
         cfg = cls(
-            entry_speed_ms      = d["entry_speed_kms"] * 1000.0,
-            entry_angle_deg     = d["entry_angle_deg"],
-            mass_kg             = d["mass_kg"],
-            cone_radius_m       = d["cone_radius_m"],
-            cone_half_angle_deg = d["cone_half_angle_deg"],
-            num_parachutes      = int(d["num_parachutes"]),
-            drogue_area_m2      = d["drogue_area_m2"],
-            main_chute_area_m2  = d["main_chute_area_m2"],
-            auto_deploy_drogue_ms = d["auto_drogue_ms"],
-            auto_deploy_main_ms   = d["auto_main_ms"],
-            target_pressure_bar = d["target_pressure_bar"],
+            entry_speed_ms=d["entry_speed_kms"] * 1000.0,
+            entry_angle_deg=d["entry_angle_deg"],
+            mass_kg=d["mass_kg"],
+            cone_radius_m=d["cone_radius_m"],
+            cone_half_angle_deg=d["cone_half_angle_deg"],
+            num_parachutes=int(d["num_parachutes"]),
+            drogue_area_m2=d["drogue_area_m2"],
+            main_chute_area_m2=d["main_chute_area_m2"],
+            auto_deploy_drogue_ms=d["auto_drogue_ms"],
+            auto_deploy_main_ms=d["auto_main_ms"],
+            target_pressure_bar=d["target_pressure_bar"],
             # science_duration stored as minutes in UI
-            science_duration_s  = d["science_duration_s"] * 60.0,
+            science_duration_s=d["science_duration_s"] * 60.0,
         )
         return cfg
 
@@ -114,36 +114,36 @@ class ProbeConfig:
 @dataclass
 class ProbeState:
     # Position & kinematics
-    altitude_km:       float = 400.0
-    velocity_ms:       float = 0.0      # vertical speed, m/s  (positive = descending)
-    horiz_velocity:    float = 0.0      # horizontal speed, m/s
+    altitude_km: float = 400.0
+    velocity_ms: float = 0.0  # vertical speed, m/s  (positive = descending)
+    horiz_velocity: float = 0.0  # horizontal speed, m/s
     horiz_position_km: float = 0.0
 
     # Time
-    elapsed_s:         float = 0.0
+    elapsed_s: float = 0.0
 
     # Phase
     phase: Phase = Phase.ENTRY
 
     # Systems
-    heat_shield_on:        bool = True
-    drogue_deployed:       bool = False
-    main_chute_deployed:   bool = False
-    instruments_on:        bool = False
+    heat_shield_on: bool = True
+    drogue_deployed: bool = False
+    main_chute_deployed: bool = False
+    instruments_on: bool = False
 
     # Auto-deploy flags (set once per deployment to avoid repeat messages)
     auto_drogue_triggered: bool = False
-    auto_main_triggered:   bool = False
+    auto_main_triggered: bool = False
 
     # Atmospheric readings (updated each step)
-    temperature_k:  float = 80.0
-    pressure_bar:   float = 1e-7
-    density:        float = 3e-7
-    wind_speed:     float = 0.0
+    temperature_k: float = 80.0
+    pressure_bar: float = 1e-7
+    density: float = 3e-7
+    wind_speed: float = 0.0
 
     # Derived quantities
-    gload:      float = 0.0
-    heat_flux:  float = 0.0   # W/m² approx, for display
+    gload: float = 0.0
+    heat_flux: float = 0.0  # W/m² approx, for display
 
     # Failure
     failure_reason: Optional[FailureReason] = None
@@ -152,20 +152,20 @@ class ProbeState:
     science_data_s: float = 0.0
 
     # Peak values
-    peak_gload:       float = 0.0
+    peak_gload: float = 0.0
     peak_temperature: float = 0.0
-    peak_pressure:    float = 0.0
+    peak_pressure: float = 0.0
 
     @classmethod
     def from_config(cls, config: "ProbeConfig") -> "ProbeState":
         """Initialise state from config (entry angle sets velocity components)."""
         angle_rad = math.radians(config.entry_angle_deg)
-        v_vert  = config.entry_speed_ms * math.sin(angle_rad)   # downward
-        v_horiz = config.entry_speed_ms * math.cos(angle_rad)   # horizontal
+        v_vert = config.entry_speed_ms * math.sin(angle_rad)  # downward
+        v_horiz = config.entry_speed_ms * math.cos(angle_rad)  # horizontal
         return cls(
-            altitude_km    = 400.0,
-            velocity_ms    = v_vert,
-            horiz_velocity = v_horiz,
+            altitude_km=400.0,
+            velocity_ms=v_vert,
+            horiz_velocity=v_horiz,
         )
 
     # ------------------------------------------------------------------

@@ -5,9 +5,10 @@ Returns a filled ProbeConfig (or None if user closed the window).
 """
 
 import math
-import pygame
 from dataclasses import dataclass
 from typing import Optional
+
+import pygame
 
 # ---------------------------------------------------------------------------
 # Layout
@@ -15,37 +16,37 @@ from typing import Optional
 SCREEN_W = 1280
 SCREEN_H = 720
 
-C_BG        = (  5,   8,  14)
-C_PANEL     = (  8,  10,  18)
-C_BORDER    = ( 35,  45,  65)
-C_TITLE     = (220, 155,   0)   # amber
-C_LABEL     = (195, 210, 220)
-C_VALUE     = (  0, 210, 230)   # cyan
-C_UNIT      = ( 80,  95, 110)
-C_TRACK     = ( 18,  24,  36)
-C_FILL      = (  0, 130, 180)
-C_KNOB      = (  0, 200, 220)
-C_KNOB_HOV  = ( 80, 230, 245)
-C_BTN_BG    = ( 12,  20,  38)
-C_BTN_HOV   = ( 22,  38,  70)
-C_BTN_TXT   = (195, 210, 220)
-C_DESC      = ( 65,  80,  95)
-C_SECTION   = (  0, 160, 195)
-C_WARN      = (215, 165,   0)
+C_BG = (5, 8, 14)
+C_PANEL = (8, 10, 18)
+C_BORDER = (35, 45, 65)
+C_TITLE = (220, 155, 0)  # amber
+C_LABEL = (195, 210, 220)
+C_VALUE = (0, 210, 230)  # cyan
+C_UNIT = (80, 95, 110)
+C_TRACK = (18, 24, 36)
+C_FILL = (0, 130, 180)
+C_KNOB = (0, 200, 220)
+C_KNOB_HOV = (80, 230, 245)
+C_BTN_BG = (12, 20, 38)
+C_BTN_HOV = (22, 38, 70)
+C_BTN_TXT = (195, 210, 220)
+C_DESC = (65, 80, 95)
+C_SECTION = (0, 160, 195)
+C_WARN = (215, 165, 0)
 
 
 @dataclass
 class ParamDef:
-    key:        str
-    label:      str
-    unit:       str
-    min_val:    float
-    max_val:    float
-    default:    float
-    step:       float          # arrow key / scroll increment
-    fmt:        str   = ".1f"  # format string for display
-    desc:       str   = ""     # short description shown below label
-    integer:    bool  = False  # snap to integer
+    key: str
+    label: str
+    unit: str
+    min_val: float
+    max_val: float
+    default: float
+    step: float  # arrow key / scroll increment
+    fmt: str = ".1f"  # format string for display
+    desc: str = ""  # short description shown below label
+    integer: bool = False  # snap to integer
 
 
 # ---------------------------------------------------------------------------
@@ -55,57 +56,57 @@ PARAM_SECTIONS = [
     {
         "title": "УСЛОВИЯ ВХОДА",
         "params": [
-            ParamDef("entry_speed_kms", "Скорость входа",  "км/с",
+            ParamDef("entry_speed_kms", "Скорость входа", "км/с",
                      min_val=24.0, max_val=35.0, default=29.5, step=0.5, fmt=".1f",
                      desc="Скорость зонда на границе атмосферы (~400 км)"),
-            ParamDef("entry_angle_deg", "Угол входа",      "°",
-                     min_val=5.0,  max_val=35.0, default=15.0, step=0.5, fmt=".1f",
+            ParamDef("entry_angle_deg", "Угол входа", "°",
+                     min_val=5.0, max_val=35.0, default=15.0, step=0.5, fmt=".1f",
                      desc="Угол ниже горизонта при входе (мелкий=плавный, крутой=горячий)"),
         ],
     },
     {
         "title": "ГЕОМЕТРИЯ ЗОНДА",
         "params": [
-            ParamDef("mass_kg",             "Масса зонда",     "кг",
+            ParamDef("mass_kg", "Масса зонда", "кг",
                      min_val=200.0, max_val=600.0, default=340.0, step=10.0, fmt=".0f",
                      desc="Полная масса зонда включая тепловой щит"),
-            ParamDef("cone_radius_m",       "Радиус конуса",   "м",
-                     min_val=0.4,  max_val=2.5,  default=0.9,  step=0.05, fmt=".2f",
+            ParamDef("cone_radius_m", "Радиус конуса", "м",
+                     min_val=0.4, max_val=2.5, default=0.9, step=0.05, fmt=".2f",
                      desc="Радиус основания капсулы (площадь миделя = π·r²)"),
             ParamDef("cone_half_angle_deg", "Полуугол конуса", "°",
-                     min_val=15.0, max_val=75.0, default=45.0, step=1.0,  fmt=".0f",
+                     min_val=15.0, max_val=75.0, default=45.0, step=1.0, fmt=".0f",
                      desc="Полуугол носового конуса (тупее = больше торможения и нагрева)"),
         ],
     },
     {
         "title": "ПАРАШЮТНАЯ СИСТЕМА",
         "params": [
-            ParamDef("num_parachutes",      "Кол-во парашютов","",
-                     min_val=1.0,  max_val=2.0,  default=2.0,  step=1.0,  fmt=".0f",
+            ParamDef("num_parachutes", "Кол-во парашютов", "",
+                     min_val=1.0, max_val=2.0, default=2.0, step=1.0, fmt=".0f",
                      integer=True,
                      desc="1 = только основной · 2 = тормозной + основной"),
-            ParamDef("drogue_area_m2",      "Площадь торм.",   "м²",
-                     min_val=1.0,  max_val=10.0, default=2.5,  step=0.5,  fmt=".1f",
+            ParamDef("drogue_area_m2", "Площадь торм.", "м²",
+                     min_val=1.0, max_val=10.0, default=2.5, step=0.5, fmt=".1f",
                      desc="Площадь купола тормозного парашюта (только при 2 парашютах)"),
-            ParamDef("main_chute_area_m2",  "Площадь осн.",    "м²",
-                     min_val=5.0,  max_val=50.0, default=20.0, step=1.0,  fmt=".0f",
+            ParamDef("main_chute_area_m2", "Площадь осн.", "м²",
+                     min_val=5.0, max_val=50.0, default=20.0, step=1.0, fmt=".0f",
                      desc="Площадь купола основного парашюта"),
-            ParamDef("auto_drogue_ms",      "Раскрытие торм.", "м/с",
+            ParamDef("auto_drogue_ms", "Раскрытие торм.", "м/с",
                      min_val=100.0, max_val=3000.0, default=600.0, step=50.0, fmt=".0f",
                      desc="Авто-раскрытие тормозного при снижении скорости ниже порога"),
-            ParamDef("auto_main_ms",        "Раскрытие осн.",  "м/с",
-                     min_val=30.0,  max_val=500.0, default=150.0, step=10.0, fmt=".0f",
+            ParamDef("auto_main_ms", "Раскрытие осн.", "м/с",
+                     min_val=30.0, max_val=500.0, default=150.0, step=10.0, fmt=".0f",
                      desc="Авто-раскрытие основного при снижении скорости ниже порога"),
         ],
     },
     {
         "title": "ЦЕЛИ МИССИИ",
         "params": [
-            ParamDef("target_pressure_bar", "Цел. давление",   "бар",
-                     min_val=5.0,  max_val=100.0, default=10.0, step=5.0,  fmt=".0f",
+            ParamDef("target_pressure_bar", "Цел. давление", "бар",
+                     min_val=5.0, max_val=100.0, default=10.0, step=5.0, fmt=".0f",
                      desc="Успех миссии: выжить и достичь этого давления"),
-            ParamDef("science_duration_s",  "Время науки",     "мин",
-                     min_val=5.0,  max_val=120.0, default=30.0, step=5.0,  fmt=".0f",
+            ParamDef("science_duration_s", "Время науки", "мин",
+                     min_val=5.0, max_val=120.0, default=30.0, step=5.0, fmt=".0f",
                      desc="Минут передачи научных данных для полного успеха"),
         ],
     },
@@ -123,11 +124,11 @@ class Slider:
     KNOB_R = 9
 
     def __init__(self, rect: pygame.Rect, pdef: ParamDef):
-        self.rect  = rect   # track rectangle
-        self.pdef  = pdef
+        self.rect = rect  # track rectangle
+        self.pdef = pdef
         self.value = pdef.default
         self.dragging = False
-        self._hover   = False
+        self._hover = False
 
     def _val_to_x(self) -> int:
         t = (self.value - self.pdef.min_val) / (self.pdef.max_val - self.pdef.min_val)
@@ -162,7 +163,7 @@ class Slider:
         if event.type == pygame.MOUSEWHEEL:
             kx = self._val_to_x()
             if abs(pygame.mouse.get_pos()[0] - kx) < 60 and \
-               abs(pygame.mouse.get_pos()[1] - self.rect.centery) < 30:
+                    abs(pygame.mouse.get_pos()[1] - self.rect.centery) < 30:
                 delta = self.pdef.step * event.y
                 self.value = max(self.pdef.min_val,
                                  min(self.pdef.max_val, self.value + delta))
@@ -199,21 +200,21 @@ class Slider:
 # Config screen
 # ---------------------------------------------------------------------------
 class ConfigScreen:
-    SLIDER_W    = 320
-    SLIDER_H    = Slider.HEIGHT
-    ROW_H       = 68     # height per parameter row
-    COL_GAP     = 60
-    LEFT_COL_X  = 50
+    SLIDER_W = 320
+    SLIDER_H = Slider.HEIGHT
+    ROW_H = 68  # height per parameter row
+    COL_GAP = 60
+    LEFT_COL_X = 50
     RIGHT_COL_X = 680
-    LABEL_W     = 170
+    LABEL_W = 170
 
     def __init__(self):
         pygame.font.init()
-        self.font_title   = pygame.font.SysFont("Consolas", 17, bold=True)
+        self.font_title = pygame.font.SysFont("Consolas", 17, bold=True)
         self.font_section = pygame.font.SysFont("Consolas", 13, bold=True)
-        self.font_label   = pygame.font.SysFont("Consolas", 13, bold=True)
-        self.font_value   = pygame.font.SysFont("Consolas", 14, bold=True)
-        self.font_desc    = pygame.font.SysFont("Consolas", 11)
+        self.font_label = pygame.font.SysFont("Consolas", 13, bold=True)
+        self.font_value = pygame.font.SysFont("Consolas", 14, bold=True)
+        self.font_desc = pygame.font.SysFont("Consolas", 11)
         self.fonts = {
             "title": self.font_title,
             "section": self.font_section,
@@ -224,7 +225,7 @@ class ConfigScreen:
 
         # Build layout: place params in two columns by section
         self.sliders: dict[str, Slider] = {}
-        self._layout: list[dict] = []    # [{type, y, col, ...}]
+        self._layout: list[dict] = []  # [{type, y, col, ...}]
         self._build_layout()
 
         # Launch button
@@ -233,8 +234,8 @@ class ConfigScreen:
     def _build_layout(self):
         """Assign screen positions to all sections and params (two-column layout)."""
         START_Y = 70
-        col_x   = [self.LEFT_COL_X, self.RIGHT_COL_X]
-        col_y   = [START_Y, START_Y]
+        col_x = [self.LEFT_COL_X, self.RIGHT_COL_X]
+        col_y = [START_Y, START_Y]
 
         for section in PARAM_SECTIONS:
             # Place section heading in whichever column has less content
@@ -320,7 +321,7 @@ class ConfigScreen:
                 lbl = self.font_section.render(f" {item['title']} ", True, C_SECTION)
                 bg = pygame.Surface((lbl.get_width(), lbl.get_height()))
                 bg.fill(C_BG)
-                screen.blit(bg,  (x + 8, y - 1))
+                screen.blit(bg, (x + 8, y - 1))
                 screen.blit(lbl, (x + 8, y - 1))
 
             elif item["type"] == "param":

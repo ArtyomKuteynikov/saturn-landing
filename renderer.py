@@ -17,48 +17,48 @@ from probe import ProbeState, ProbeConfig, Phase
 # ─────────────────────────────────────────────────────────────────────────────
 SCREEN_W = 1280
 SCREEN_H = 720
-SCENE_W  = 820
-HUD_X    = SCENE_W
-HUD_W    = SCREEN_W - SCENE_W
+SCENE_W = 820
+HUD_X = SCENE_W
+HUD_W = SCREEN_W - SCENE_W
 
 # Probe is rendered at this fixed Y inside the scene
-PROBE_Y  = int(SCREEN_H * 0.38)
+PROBE_Y = int(SCREEN_H * 0.38)
 
 # Visible altitude window: probe_alt ± these km
 KM_ABOVE = 56.0
 KM_BELOW = 104.0
-VIEW_KM  = KM_ABOVE + KM_BELOW
-PX_PER_KM = SCREEN_H / VIEW_KM          # ~4.5 px/km
+VIEW_KM = KM_ABOVE + KM_BELOW
+PX_PER_KM = SCREEN_H / VIEW_KM  # ~4.5 px/km
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Colour palette  (mission-control / scientific terminal)
 # ─────────────────────────────────────────────────────────────────────────────
-C_BG        = (  5,   8,  14)   # near-black space
-C_PANEL     = (  8,  10,  18)   # HUD background
-C_BORDER    = ( 35,  45,  65)   # thin panel borders
-C_GRID      = ( 18,  24,  36)   # scene grid lines
-C_DIM       = ( 60,  72,  88)   # secondary/disabled text
-C_BRIGHT    = (195, 210, 220)   # primary text
-C_CYAN      = (  0, 210, 230)   # accent — primary data readouts
-C_AMBER     = (220, 155,   0)   # accent — labels / section headers
-C_OK        = (  0, 175,  80)   # nominal status
-C_WARN      = (215, 165,   0)   # caution
-C_CRIT      = (200,  40,  40)   # critical / failure
-C_NOMINAL   = (  0, 130, 195)   # informational blue
+C_BG = (5, 8, 14)  # near-black space
+C_PANEL = (8, 10, 18)  # HUD background
+C_BORDER = (35, 45, 65)  # thin panel borders
+C_GRID = (18, 24, 36)  # scene grid lines
+C_DIM = (60, 72, 88)  # secondary/disabled text
+C_BRIGHT = (195, 210, 220)  # primary text
+C_CYAN = (0, 210, 230)  # accent — primary data readouts
+C_AMBER = (220, 155, 0)  # accent — labels / section headers
+C_OK = (0, 175, 80)  # nominal status
+C_WARN = (215, 165, 0)  # caution
+C_CRIT = (200, 40, 40)  # critical / failure
+C_NOMINAL = (0, 130, 195)  # informational blue
 
 # Atmosphere gradient stops  (altitude_km → RGB)
 _ATM_GRADIENT = [
-    ( 400, (  5,   8,  14)),   # space
-    ( 200, ( 12,  12,  20)),
-    ( 100, ( 20,  18,  24)),
-    (  60, ( 35,  28,  18)),   # haze begins
-    (  20, ( 55,  42,  18)),
-    (   0, ( 75,  58,  22)),   # 1-bar level
-    ( -30, ( 90,  68,  24)),   # ammonia cloud layer
-    ( -60, ( 70,  55,  28)),   # NH4SH clouds
-    ( -90, ( 65,  75,  85)),   # water clouds — slightly blue-grey
-    (-150, ( 85,  50,  20)),
-    (-200, (105,  45,  10)),   # deep atmosphere, reddish
+    (400, (5, 8, 14)),  # space
+    (200, (12, 12, 20)),
+    (100, (20, 18, 24)),
+    (60, (35, 28, 18)),  # haze begins
+    (20, (55, 42, 18)),
+    (0, (75, 58, 22)),  # 1-bar level
+    (-30, (90, 68, 24)),  # ammonia cloud layer
+    (-60, (70, 55, 28)),  # NH4SH clouds
+    (-90, (65, 75, 85)),  # water clouds — slightly blue-grey
+    (-150, (85, 50, 20)),
+    (-200, (105, 45, 10)),  # deep atmosphere, reddish
 ]
 
 
@@ -85,7 +85,7 @@ def _atm_color_at(alt_km: float) -> tuple:
 # ─────────────────────────────────────────────────────────────────────────────
 def _scene_y(probe_alt_km: float, element_alt_km: float) -> int:
     """Y-pixel in scene for an element at element_alt_km, given current probe altitude."""
-    delta_km = probe_alt_km - element_alt_km   # positive → element below probe
+    delta_km = probe_alt_km - element_alt_km  # positive → element below probe
     return int(PROBE_Y + delta_km * PX_PER_KM)
 
 
@@ -99,11 +99,11 @@ def _status_color(value: float, warn: float, crit: float) -> tuple:
 # Buttons
 # ─────────────────────────────────────────────────────────────────────────────
 BUTTONS = [
-    {"id": "drogue",      "label": "ТОРМОЗНОЙ ПАРАШЮТ", "key": "D"},
-    {"id": "main_chute",  "label": "ОСНОВНОЙ ПАРАШЮТ",  "key": "M"},
-    {"id": "jettison",    "label": "СБРОС ЩИТА",        "key": "J"},
-    {"id": "instruments", "label": "ПРИБОРЫ",            "key": "I"},
-    {"id": "restart",     "label": "ПЕРЕЗАПУСК",         "key": "R"},
+    {"id": "drogue", "label": "ТОРМОЗНОЙ ПАРАШЮТ", "key": "D"},
+    {"id": "main_chute", "label": "ОСНОВНОЙ ПАРАШЮТ", "key": "M"},
+    {"id": "jettison", "label": "СБРОС ЩИТА", "key": "J"},
+    {"id": "instruments", "label": "ПРИБОРЫ", "key": "I"},
+    {"id": "restart", "label": "ПЕРЕЗАПУСК", "key": "R"},
 ]
 _BTN_W, _BTN_H, _BTN_GAP = 215, 32, 6
 
@@ -115,11 +115,11 @@ class Renderer:
     def __init__(self, screen: pygame.Surface):
         self.screen = screen
         pygame.font.init()
-        self.f_head   = pygame.font.SysFont("Consolas", 13, bold=True)
-        self.f_data   = pygame.font.SysFont("Consolas", 15, bold=True)
-        self.f_label  = pygame.font.SysFont("Consolas", 13)
-        self.f_small  = pygame.font.SysFont("Consolas", 11)
-        self.f_phase  = pygame.font.SysFont("Consolas", 16, bold=True)
+        self.f_head = pygame.font.SysFont("Consolas", 13, bold=True)
+        self.f_data = pygame.font.SysFont("Consolas", 15, bold=True)
+        self.f_label = pygame.font.SysFont("Consolas", 13)
+        self.f_small = pygame.font.SysFont("Consolas", 11)
+        self.f_phase = pygame.font.SysFont("Consolas", 16, bold=True)
 
         # Stars fixed positions (only visible in upper portion of scene)
         rng = random.Random(7)
@@ -154,8 +154,8 @@ class Renderer:
     # Scene
     # ─────────────────────────────────────────────────────────────────────────
     def _draw_scene(self, state: ProbeState):
-        surf  = self.screen
-        alt   = state.altitude_km
+        surf = self.screen
+        alt = state.altitude_km
 
         # --- Atmosphere gradient background ---
         # Rebuild only when probe has moved significantly
@@ -254,8 +254,8 @@ class Renderer:
         """Saturn rings in background (high altitude only)."""
         ring_data = [
             (SCREEN_H // 7 + 10, 340, 16, (180, 155, 90)),
-            (SCREEN_H // 7 - 4,  260, 10, (150, 128, 72)),
-            (SCREEN_H // 7 + 26, 180,  7, (130, 110, 60)),
+            (SCREEN_H // 7 - 4, 260, 10, (150, 128, 72)),
+            (SCREEN_H // 7 + 26, 180, 7, (130, 110, 60)),
         ]
         for ry, half_w, ring_h, col in ring_data:
             a = int(alpha * 80)
@@ -325,13 +325,13 @@ class Renderer:
 
         # Probe body — angular capsule shape
         body_pts = [
-            (x,      y - 18),   # nose tip
-            (x + 9,  y - 10),
-            (x + 10, y +  2),
-            (x +  7, y + 12),
-            (x -  7, y + 12),
-            (x - 10, y +  2),
-            (x -  9, y - 10),
+            (x, y - 18),  # nose tip
+            (x + 9, y - 10),
+            (x + 10, y + 2),
+            (x + 7, y + 12),
+            (x - 7, y + 12),
+            (x - 10, y + 2),
+            (x - 9, y - 10),
         ]
         pygame.draw.polygon(surf, (140, 148, 158), body_pts)
         pygame.draw.polygon(surf, (180, 190, 200), body_pts, 1)
@@ -352,12 +352,12 @@ class Renderer:
 
     def _draw_phase_banner(self, surf: pygame.Surface, state: ProbeState):
         phase_info = {
-            Phase.ENTRY:      ("ГИПЕРЗВУКОВОЙ ВХОД",     C_CRIT),
-            Phase.DROGUE:     ("ТОРМОЗНОЙ ПАРАШЮТ",      C_WARN),
-            Phase.MAIN_CHUTE: ("ОСНОВНОЙ ПАРАШЮТ",       C_NOMINAL),
-            Phase.SCIENCE:    ("НАУЧНЫЕ ОПЕРАЦИИ",       C_OK),
-            Phase.SUCCESS:    ("МИССИЯ ВЫПОЛНЕНА",       C_OK),
-            Phase.FAILED:     ("МИССИЯ ПРЕРВАНА",        C_CRIT),
+            Phase.ENTRY: ("ГИПЕРЗВУКОВОЙ ВХОД", C_CRIT),
+            Phase.DROGUE: ("ТОРМОЗНОЙ ПАРАШЮТ", C_WARN),
+            Phase.MAIN_CHUTE: ("ОСНОВНОЙ ПАРАШЮТ", C_NOMINAL),
+            Phase.SCIENCE: ("НАУЧНЫЕ ОПЕРАЦИИ", C_OK),
+            Phase.SUCCESS: ("МИССИЯ ВЫПОЛНЕНА", C_OK),
+            Phase.FAILED: ("МИССИЯ ПРЕРВАНА", C_CRIT),
         }
         text, col = phase_info.get(state.phase, ("", C_BRIGHT))
         if not text:
@@ -372,9 +372,9 @@ class Renderer:
     # ─────────────────────────────────────────────────────────────────────────
     def _draw_hud(self, state: ProbeState, config: ProbeConfig, messages: list[str]):
         surf = self.screen
-        x0   = HUD_X + 8
-        x1   = SCREEN_W - 8
-        mid  = HUD_X + HUD_W // 2
+        x0 = HUD_X + 8
+        x1 = SCREEN_W - 8
+        mid = HUD_X + HUD_W // 2
 
         # Background
         pygame.draw.rect(surf, C_PANEL, pygame.Rect(HUD_X, 0, HUD_W, SCREEN_H))
@@ -424,7 +424,7 @@ class Renderer:
         self._bar(surf, y + 1, x0, x1, state.gload / config.max_gload, g_col)
         y += 9
         y = self._trow(surf, y, x0, x1, "ТЕПЛОВОЙ ПОТОК",
-                       f"{max(0,state.heat_flux):.2e} Вт/м²",
+                       f"{max(0, state.heat_flux):.2e} Вт/м²",
                        C_WARN if state.heat_flux > 1e6 else C_DIM)
         y += 3
 
@@ -434,7 +434,7 @@ class Renderer:
             pct = min(1.0, state.science_data_s / config.science_duration_s)
             y = self._trow(surf, y, x0, x1, "ПЕРЕДАНО",
                            self._fmt_time(state.science_data_s), C_OK)
-            self._bar(surf, y + 1, x0, x1, pct, C_OK, label=f"{pct*100:.0f}%")
+            self._bar(surf, y + 1, x0, x1, pct, C_OK, label=f"{pct * 100:.0f}%")
             y += 9
             required = self._fmt_time(config.science_duration_s)
             y = self._trow(surf, y, x0, x1, "ТРЕБУЕТСЯ",
@@ -519,7 +519,7 @@ class Renderer:
         # LED dot
         led_col = C_OK if active else C_DIM
         pygame.draw.circle(surf, led_col, (x0 + 5, y + 7), 4)
-        pygame.draw.circle(surf, (led_col[0]//2, led_col[1]//2, led_col[2]//2),
+        pygame.draw.circle(surf, (led_col[0] // 2, led_col[1] // 2, led_col[2] // 2),
                            (x0 + 5, y + 7), 4, 1)
         lbl = self.f_label.render(f"  {name:<18}", True,
                                   C_BRIGHT if active else C_DIM)
@@ -532,13 +532,13 @@ class Renderer:
     def _draw_buttons(self, surf: pygame.Surface, state: ProbeState):
         mx, my = pygame.mouse.get_pos()
         for btn in BUTTONS:
-            rect   = self.button_rects[btn["id"]]
+            rect = self.button_rects[btn["id"]]
             active = not state.is_terminal() or btn["id"] == "restart"
-            hover  = rect.collidepoint(mx, my) and active
+            hover = rect.collidepoint(mx, my) and active
 
-            bg  = (22, 30, 48) if active else (10, 12, 18)
+            bg = (22, 30, 48) if active else (10, 12, 18)
             brd = (C_NOMINAL if hover else C_BORDER) if active else (25, 28, 35)
-            pygame.draw.rect(surf, bg,  rect)
+            pygame.draw.rect(surf, bg, rect)
             pygame.draw.rect(surf, brd, rect, 1)
 
             # Key badge

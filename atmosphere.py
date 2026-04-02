@@ -20,30 +20,30 @@ import math
 # (altitude_km, pressure_bar, temperature_K, density_kg_m3)
 _PROFILE = [
     # High atmosphere / entry zone
-    ( 400,  1.0e-7,   80.0,  3.0e-7),
-    ( 300,  1.0e-6,   82.0,  3.5e-6),
-    ( 200,  1.0e-5,   85.0,  3.4e-5),
-    ( 150,  1.0e-4,   88.0,  3.3e-4),
-    ( 100,  1.0e-3,   95.0,  3.0e-3),
-    (  80,  5.0e-3,  100.0,  1.4e-2),
-    (  60,  2.0e-2,  108.0,  5.4e-2),
-    (  40,  1.0e-1,  118.0,  2.5e-1),
-    (  20,  4.0e-1,  126.0,  9.3e-1),
+    (400, 1.0e-7, 80.0, 3.0e-7),
+    (300, 1.0e-6, 82.0, 3.5e-6),
+    (200, 1.0e-5, 85.0, 3.4e-5),
+    (150, 1.0e-4, 88.0, 3.3e-4),
+    (100, 1.0e-3, 95.0, 3.0e-3),
+    (80, 5.0e-3, 100.0, 1.4e-2),
+    (60, 2.0e-2, 108.0, 5.4e-2),
+    (40, 1.0e-1, 118.0, 2.5e-1),
+    (20, 4.0e-1, 126.0, 9.3e-1),
     # 1-bar reference level
-    (   0,  1.0,     134.0,  2.2   ),
+    (0, 1.0, 134.0, 2.2),
     # Below 1-bar (cloud layers)
-    ( -20,  2.5,     160.0,  4.6   ),   # upper ammonia clouds ~1.5 bar
-    ( -50,  5.0,     200.0,  7.3   ),   # ammonium-hydrosulfide clouds ~3-5 bar
-    ( -80, 10.0,     300.0, 10.0   ),   # water cloud top ~10 bar
-    (-120, 25.0,     430.0, 17.0   ),
-    (-170, 60.0,     700.0, 25.0   ),
-    (-200,100.0,    1000.0, 30.0   ),   # probe destruction zone
+    (-20, 2.5, 160.0, 4.6),  # upper ammonia clouds ~1.5 bar
+    (-50, 5.0, 200.0, 7.3),  # ammonium-hydrosulfide clouds ~3-5 bar
+    (-80, 10.0, 300.0, 10.0),  # water cloud top ~10 bar
+    (-120, 25.0, 430.0, 17.0),
+    (-170, 60.0, 700.0, 25.0),
+    (-200, 100.0, 1000.0, 30.0),  # probe destruction zone
 ]
 
-_alts   = [r[0] for r in _PROFILE]
-_press  = [r[1] for r in _PROFILE]
-_temps  = [r[2] for r in _PROFILE]
-_dens   = [r[3] for r in _PROFILE]
+_alts = [r[0] for r in _PROFILE]
+_press = [r[1] for r in _PROFILE]
+_temps = [r[2] for r in _PROFILE]
+_dens = [r[3] for r in _PROFILE]
 
 
 def _interp(alt_km: float, table_x: list, table_y: list) -> float:
@@ -79,29 +79,29 @@ def _interp_log(alt_km: float, table_x: list, table_y: list) -> float:
 # Public API
 # ---------------------------------------------------------------------------
 
-GRAVITY = 10.44          # m/s² at 1-bar level (NASA fact sheet)
-SCALE_HEIGHT = 59_500    # m — approximate scale height for density falloff above profile
+GRAVITY = 10.44  # m/s² at 1-bar level (NASA fact sheet)
+SCALE_HEIGHT = 59_500  # m — approximate scale height for density falloff above profile
 
 # Wind profile: horizontal wind speed (m/s) vs altitude (km)
 # Saturn equatorial jet reaches ~500 m/s near the cloud tops
 _WIND_PROFILE = [
-    ( 400,   0.0),
-    ( 200,  50.0),
-    ( 100, 150.0),
-    (  60, 300.0),
-    (  20, 450.0),
-    (   0, 400.0),
-    ( -50, 300.0),
+    (400, 0.0),
+    (200, 50.0),
+    (100, 150.0),
+    (60, 300.0),
+    (20, 450.0),
+    (0, 400.0),
+    (-50, 300.0),
     (-200, 200.0),
 ]
-_wind_alts  = [r[0] for r in _WIND_PROFILE]
+_wind_alts = [r[0] for r in _WIND_PROFILE]
 _wind_speed = [r[1] for r in _WIND_PROFILE]
 
 # Cloud layer definitions for renderer
 CLOUD_LAYERS = [
-    {"name": "Облака аммиака",           "alt_km":  -10, "color": (220, 200, 160), "thickness_km": 30},
-    {"name": "Гидросульфид аммония",     "alt_km":  -50, "color": (180, 140, 100), "thickness_km": 30},
-    {"name": "Водяные облака",           "alt_km":  -80, "color": (160, 180, 200), "thickness_km": 40},
+    {"name": "Облака аммиака", "alt_km": -10, "color": (220, 200, 160), "thickness_km": 30},
+    {"name": "Гидросульфид аммония", "alt_km": -50, "color": (180, 140, 100), "thickness_km": 30},
+    {"name": "Водяные облака", "alt_km": -80, "color": (160, 180, 200), "thickness_km": 40},
 ]
 
 
