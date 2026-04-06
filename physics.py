@@ -1,20 +1,21 @@
 """
 Physics integration for the Saturn descent simulator.
 
-Integration scheme: semi-implicit Euler, fixed dt = 0.05 s.
+Mathematical model from PDF (НОЦ ПИШ задание 4):
+  - Variable gravity: g(y) = GM / (R_planet + y)²
+  - Exponential atmosphere: rho(y) = rho0 · exp(-y / H_scale)
+  - Drag: F_drag = 0.5 · rho · C_D · S · v²
+  - Lift: F_lift = 0.5 · rho · C_L · S · v²
+  - Heat flux: q = C_planet · v³ · sqrt(rho) / sqrt(R_nose)
 
-Forces on the probe (vertical axis, positive = downward):
-  F_gravity = m * g
-  F_drag    = 0.5 * rho(h) * Cd * A * v_rel²   (opposes motion)
+Equations of motion (trajectory-angle formulation):
+  dv/dt   = -F_drag / m - g · sin(theta)
+  dθ/dt   = F_lift / (m · v) - (g / v) · cos(theta)
+            + v · cos(theta) / (R_planet + y)
+  dy/dt   = v · sin(theta)
+  dx/dt   = R_planet / (R_planet + y) · v · cos(theta)
 
-Horizontal axis:
-  F_wind_drag = 0.5 * rho(h) * Cd * A * (v_wind - v_horiz)²
-
-Heat flux (simplified Chapman analogue, display only):
-  q ≈ K * sqrt(rho) * v³   [W/m²]
-
-Auto-deployment: drogue and main chute deploy automatically when
-vertical speed drops below the configured thresholds.
+Integration: semi-implicit Euler, fixed dt = 0.05 s.
 """
 
 import math
@@ -23,9 +24,6 @@ import atmosphere as atm
 from probe import ProbeState, ProbeConfig, Phase
 
 DT = 0.05  # integration step, seconds
-G_EARTH = 9.81  # m/s² — for g-load conversion
-
-_HEAT_COEFF = 1.0e-9  # empirical constant for heat flux display
 
 
 def step(state: ProbeState, config: ProbeConfig) -> list[str]:
@@ -37,13 +35,18 @@ def step(state: ProbeState, config: ProbeConfig) -> list[str]:
 
     state.elapsed_s += DT
 
-    alt_km = state.altitude_km
+    # Current state
+    y_m = state.altitude_km * 1000.0   # altitude in metres
+    v = state.velocity_ms              # total speed, m/s
+    theta = state.theta_rad            # trajectory angle, rad (negative = descending)
+    x_m = state.horiz_position_km * 1000.0  # downrange in metres
 
-    # --- Atmospheric properties at current altitude ---
-    rho = atm.get_density(alt_km)
-    T = atm.get_temperature(alt_km)
-    P = atm.get_pressure(alt_km)
-    v_wind = atm.get_wind_speed(alt_km)
+    # --- Atmospheric properties ---
+    # Use exponential model for density (PDF), tabulated for T, P, wind (display)
+    rho = atm.get_density_exp(y_m)
+    T = atm.get_temperature(state.altitude_km)
+    P = atm.get_pressure(state.altitude_km)
+    v_wind = atm.get_wind_speed(state.altitude_km)
 
     state.density = rho
     state.temperature_k = T
@@ -51,39 +54,71 @@ def step(state: ProbeState, config: ProbeConfig) -> list[str]:
     state.wind_speed = v_wind
 
     # Track peaks
-    if T > state.peak_temperature: state.peak_temperature = T
-    if P > state.peak_pressure:    state.peak_pressure = P
+    if T > state.peak_temperature:
+        state.peak_temperature = T
+    if P > state.peak_pressure:
+        state.peak_pressure = P
 
-    # --- Drag parameters ---
+    # --- Variable gravity (PDF: g = GM / (R_planet + y)²) ---
+    g_cur = atm.get_gravity(y_m)
+
+    # --- Drag & lift parameters ---
     cd, area = state.effective_cd_area(config)
+    cl = config.cl_vehicle  # lift coefficient from PDF
 
-    # --- Vertical forces ---
-    v_vert = state.velocity_ms
-    f_drag_vert = 0.5 * rho * cd * area * v_vert ** 2  # always opposes descent
-    a_vert = atm.GRAVITY - f_drag_vert / config.mass_kg
+    # Forces (PDF formulas)
+    F_drag = 0.5 * rho * cd * area * v * v
+    F_lift = 0.5 * rho * cl * area * v * v
 
-    # --- G-load (deceleration felt by structure) ---
-    decel = abs(f_drag_vert / config.mass_kg)
-    state.gload = decel / G_EARTH
+    # --- Equations of motion (PDF trajectory-angle formulation) ---
+    sin_theta = math.sin(theta)
+    cos_theta = math.cos(theta)
+
+    # dv/dt = -F_drag / m - g · sin(theta)
+    dv_dt = -F_drag / config.mass_kg - g_cur * sin_theta
+
+    # dθ/dt = F_lift / (m·v) - (g/v)·cos(theta) + v·cos(theta) / (R_planet + y)
+    r_cur = atm.R_PLANET + y_m
+    if v > 1.0:  # avoid division by zero at very low speeds
+        dtheta_dt = (F_lift / (config.mass_kg * v)
+                     - (g_cur / v) * cos_theta
+                     + (v * cos_theta) / r_cur)
+    else:
+        dtheta_dt = 0.0
+
+    # dy/dt = v · sin(theta)   (positive theta → ascending)
+    dy_dt = v * sin_theta
+
+    # dx/dt = R_planet / (R_planet + y) · v · cos(theta)
+    dx_dt = (atm.R_PLANET / r_cur) * v * cos_theta
+
+    # --- G-load (deceleration / g_earth) ---
+    decel = abs(dv_dt)
+    state.gload = decel / atm.G_EARTH
     if state.gload > state.peak_gload:
         state.peak_gload = state.gload
 
-    # --- Heat flux ---
-    state.heat_flux = _HEAT_COEFF * math.sqrt(max(rho, 1e-12)) * (v_vert ** 3)
+    # --- Heat flux (PDF: q = C_planet · v³ · sqrt(rho) / sqrt(R_nose)) ---
+    rho_safe = max(rho, 1e-10)
+    state.heat_flux = (config.c_planet * (v ** 3)
+                       * math.sqrt(rho_safe)
+                       / math.sqrt(config.r_nose_m))
 
-    # --- Horizontal wind drag ---
-    v_rel_horiz = v_wind - state.horiz_velocity
-    sign_h = 1.0 if v_rel_horiz >= 0 else -1.0
-    f_drag_horiz = 0.5 * rho * cd * area * v_rel_horiz ** 2 * sign_h
-    a_horiz = f_drag_horiz / config.mass_kg
+    # --- Integrate (semi-implicit Euler) ---
+    v_new = v + dv_dt * DT
+    v_new = max(v_new, 0.0)
 
-    # --- Integrate ---
-    state.velocity_ms += a_vert * DT
-    state.horiz_velocity += a_horiz * DT
-    state.velocity_ms = max(state.velocity_ms, 0.0)
+    theta_new = theta + dtheta_dt * DT
 
-    state.altitude_km -= state.velocity_ms * DT / 1000.0
-    state.horiz_position_km += state.horiz_velocity * DT / 1000.0
+    y_new = y_m + dy_dt * DT
+    x_new = x_m + dx_dt * DT
+
+    # --- Update state ---
+    state.velocity_ms = v_new
+    state.theta_rad = theta_new
+    state.altitude_km = y_new / 1000.0
+    state.horiz_position_km = x_new / 1000.0
+    state.horiz_velocity = v_new * math.cos(theta_new)  # for HUD display
 
     # --- Auto-deploy parachutes ---
     events += _check_auto_deploy(state, config)

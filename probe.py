@@ -43,9 +43,14 @@ class ProbeConfig:
     entry_angle_deg: float = 15.0  # degrees below horizontal
 
     # --- Geometry ---
-    mass_kg: float = 340.0  # kg
-    cone_radius_m: float = 0.9  # m — base radius of capsule
+    mass_kg: float = 500.0  # kg (PDF: mass_vehicle = 500)
+    cone_radius_m: float = 0.798  # m — so that S = pi*r² ≈ 2.0 m² (PDF: S_vehicle = 2.0)
     cone_half_angle_deg: float = 45.0  # degrees — half-angle of nose cone
+
+    # --- Aerodynamic coefficients (PDF model) ---
+    cl_vehicle: float = 0.1  # lift coefficient (PDF: C_L_vehicle = 0.1)
+    r_nose_m: float = 1.5  # m — nose radius for heat flux (PDF: R_nose = 1.5)
+    c_planet: float = 1.5e-4  # heat flux constant (PDF: C_planet = 1.5e-4)
 
     # --- Parachute system ---
     num_parachutes: int = 2  # 1 = main only; 2 = drogue + main
@@ -96,6 +101,9 @@ class ProbeConfig:
             mass_kg=d["mass_kg"],
             cone_radius_m=d["cone_radius_m"],
             cone_half_angle_deg=d["cone_half_angle_deg"],
+            cl_vehicle=d.get("cl_vehicle", 0.1),
+            r_nose_m=d.get("r_nose_m", 1.5),
+            c_planet=d.get("c_planet", 1.5e-4),
             num_parachutes=int(d["num_parachutes"]),
             drogue_area_m2=d["drogue_area_m2"],
             main_chute_area_m2=d["main_chute_area_m2"],
@@ -113,11 +121,14 @@ class ProbeConfig:
 # ---------------------------------------------------------------------------
 @dataclass
 class ProbeState:
-    # Position & kinematics
-    altitude_km: float = 400.0
-    velocity_ms: float = 0.0  # vertical speed, m/s  (positive = descending)
-    horiz_velocity: float = 0.0  # horizontal speed, m/s
-    horiz_position_km: float = 0.0
+    # Position & kinematics (trajectory-angle model from PDF)
+    altitude_km: float = 500.0       # km above 1-bar level (PDF: y0 = 500000 m)
+    velocity_ms: float = 0.0         # total speed, m/s
+    theta_rad: float = 0.0           # trajectory angle, rad (negative = descending)
+    horiz_position_km: float = 0.0   # downrange distance, km
+
+    # Derived display values (computed from v and theta each step)
+    horiz_velocity: float = 0.0      # v * cos(theta), for HUD display
 
     # Time
     elapsed_s: float = 0.0
@@ -158,13 +169,15 @@ class ProbeState:
 
     @classmethod
     def from_config(cls, config: "ProbeConfig") -> "ProbeState":
-        """Initialise state from config (entry angle sets velocity components)."""
-        angle_rad = math.radians(config.entry_angle_deg)
-        v_vert = config.entry_speed_ms * math.sin(angle_rad)  # downward
-        v_horiz = config.entry_speed_ms * math.cos(angle_rad)  # horizontal
+        """Initialise state from config.
+        PDF model: theta is trajectory angle (negative = descending).
+        entry_angle_deg is given as positive degrees below horizontal."""
+        theta_rad = -math.radians(config.entry_angle_deg)  # negative = descending
+        v_horiz = config.entry_speed_ms * math.cos(theta_rad)
         return cls(
-            altitude_km=400.0,
-            velocity_ms=v_vert,
+            altitude_km=500.0,  # PDF: y0 = 500000 m = 500 km
+            velocity_ms=config.entry_speed_ms,
+            theta_rad=theta_rad,
             horiz_velocity=v_horiz,
         )
 

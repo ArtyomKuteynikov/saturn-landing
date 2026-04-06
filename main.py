@@ -101,7 +101,8 @@ def run_simulation(screen: pygame.Surface,
     messages: list[str] = [
         f"Вход: {config.entry_speed_ms / 1000:.1f} км/с  "
         f"угол {config.entry_angle_deg:.1f}°",
-        f"Cd={config.cd_shield:.2f}  S={config.frontal_area_m2:.2f} м²",
+        f"Cd={config.cd_shield:.2f}  S={config.frontal_area_m2:.2f} м²  "
+        f"CL={config.cl_vehicle:.2f}",
     ]
     physics_acc = 0.0
 

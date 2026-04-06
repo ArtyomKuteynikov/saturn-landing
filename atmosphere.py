@@ -79,8 +79,30 @@ def _interp_log(alt_km: float, table_x: list, table_y: list) -> float:
 # Public API
 # ---------------------------------------------------------------------------
 
-GRAVITY = 10.44  # m/s² at 1-bar level (NASA fact sheet)
-SCALE_HEIGHT = 59_500  # m — approximate scale height for density falloff above profile
+# --- Planetary constants (from PDF / NASA Saturn Fact Sheet) ---
+R_PLANET = 58_232e3   # m — equatorial radius of Saturn
+GM = 3.793e16         # m³/s² — gravitational parameter (G·M)
+G_EARTH = 9.81        # m/s² — Earth surface gravity (for g-load conversion)
+
+GRAVITY = 10.44  # m/s² at 1-bar level (kept for backward compatibility)
+SCALE_HEIGHT = 59_500  # m — approximate scale height for density falloff
+
+# Exponential atmosphere model parameters (from PDF)
+RHO0 = 0.19           # kg/m³ — density at 1-bar level (y=0)
+
+
+def get_gravity(alt_m: float) -> float:
+    """Gravitational acceleration at altitude alt_m (metres above 1-bar level).
+    Uses inverse-square law: g = GM / (R_planet + y)²."""
+    r = R_PLANET + alt_m
+    return GM / (r * r)
+
+
+def get_density_exp(alt_m: float) -> float:
+    """Exponential atmosphere model: rho = rho0 · exp(-y / H_scale).
+    alt_m is in metres above 1-bar level."""
+    import math
+    return RHO0 * math.exp(-alt_m / SCALE_HEIGHT)
 
 # Wind profile: horizontal wind speed (m/s) vs altitude (km)
 # Saturn equatorial jet reaches ~500 m/s near the cloud tops
