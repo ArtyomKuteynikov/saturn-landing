@@ -325,10 +325,32 @@ class SimulationVisualization:
         self._strips = _build_atm_strips(self.y_min_km, self.y_max_km)
 
         # --- Компоновка ---
-        # Левая панель: телеметрия
-        self.info_frame = tk.Frame(self.root, bg='#1a1a2e', width=255)
-        self.info_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(8, 0), pady=8)
-        self.info_frame.pack_propagate(False)
+        # Левая панель: телеметрия (прокручиваемая)
+        _info_outer = tk.Frame(self.root, bg='#1a1a2e', width=255)
+        _info_outer.pack(side=tk.LEFT, fill=tk.Y, padx=(8, 0), pady=8)
+        _info_outer.pack_propagate(False)
+
+        _info_canvas = tk.Canvas(_info_outer, bg='#1a1a2e', highlightthickness=0)
+        _info_sb = ttk.Scrollbar(_info_outer, orient=tk.VERTICAL,
+                                  command=_info_canvas.yview)
+        _info_canvas.configure(yscrollcommand=_info_sb.set)
+        _info_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        _info_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.info_frame = tk.Frame(_info_canvas, bg='#1a1a2e')
+        _info_win = _info_canvas.create_window((0, 0), window=self.info_frame, anchor='nw')
+
+        def _on_info_cfg(e):
+            _info_canvas.configure(scrollregion=_info_canvas.bbox("all"))
+        def _on_info_canvas_cfg(e):
+            _info_canvas.itemconfig(_info_win, width=e.width)
+        def _on_info_mw(e):
+            _info_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        self.info_frame.bind('<Configure>', _on_info_cfg)
+        _info_canvas.bind('<Configure>', _on_info_canvas_cfg)
+        _info_canvas.bind('<MouseWheel>', _on_info_mw)
+        self.info_frame.bind('<MouseWheel>', _on_info_mw)
 
         # Правая панель: холст + управление
         self.viz_frame = tk.Frame(self.root, bg='#0a0a14')
@@ -1112,9 +1134,32 @@ class SaturnDescentApp:
                   foreground=[('active', '#00d4e8')])
         style.configure('TFrame', background='#0f0f1a')
 
-        # Левая панель: параметры
-        left = ttk.LabelFrame(root, text="Параметры зонда", padding=12)
-        left.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+        # Левая панель: параметры (прокручиваемая)
+        _left_outer = ttk.LabelFrame(root, text="Параметры зонда")
+        _left_outer.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+        _left_canvas = tk.Canvas(_left_outer, highlightthickness=0,
+                                  bg='#0f0f1a', width=220)
+        _left_sb = ttk.Scrollbar(_left_outer, orient=tk.VERTICAL,
+                                  command=_left_canvas.yview)
+        _left_canvas.configure(yscrollcommand=_left_sb.set)
+        _left_sb.pack(side=tk.RIGHT, fill=tk.Y)
+        _left_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        left = ttk.Frame(_left_canvas, padding=12)
+        _left_win = _left_canvas.create_window((0, 0), window=left, anchor='nw')
+
+        def _on_left_cfg(e):
+            _left_canvas.configure(scrollregion=_left_canvas.bbox("all"))
+        def _on_left_canvas_cfg(e):
+            _left_canvas.itemconfig(_left_win, width=e.width)
+        def _on_left_mw(e):
+            _left_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+
+        left.bind('<Configure>', _on_left_cfg)
+        _left_canvas.bind('<Configure>', _on_left_canvas_cfg)
+        _left_canvas.bind('<MouseWheel>', _on_left_mw)
+        left.bind('<MouseWheel>', _on_left_mw)
 
         # Правая панель: графики
         right = ttk.Frame(root)
