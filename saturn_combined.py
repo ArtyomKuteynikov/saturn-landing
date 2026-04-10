@@ -42,13 +42,18 @@ C_PLANET = 1.5e-4  # постоянная теплового потока (PDF)
 # МАТЕМАТИЧЕСКАЯ МОДЕЛЬ
 # Уравнения движения — угловая траектория (PDF НОЦ ПИШ)
 # ============================================
-def simulate(mass, C_D, S, C_L, R_nose,
+def simulate(mass, C_D, C_L, R_nose,
              y0_m, v0_ms, theta0_deg,
              drogue_area=2.5, main_area=20.0,
              auto_drogue_ms=600.0, auto_main_ms=150.0,
              shield_jettison_ms=3000.0,
              manual_drogue_t=None, manual_main_t=None,
-             dt: float = 0.1, t_max: float = 1200.0):
+             manual_shield_t=None,
+             instruments_start_t=None,
+             target_pressure_bar=None,
+             p_max_bar=None,
+             g_max=None,
+             dt: float = 0.1, t_max: float = 10800.0):
     """
     Integrate trajectory-angle equations of motion with heat shield & parachutes.
 
@@ -69,10 +74,13 @@ def simulate(mass, C_D, S, C_L, R_nose,
       dt              — integration step [s]
       t_max           — max simulation time [s]
 
-    Returns tuple of 14 arrays:
-      t, y, v, theta, x, q, overload, rho,
-      temperature, pressure, wind,
-      heat_shield (1=on/0=off), drogue (0/1), main_chute (0/1)
+    Returns tuple: (arrays_15, end_reason)
+      arrays_15: t, y, v, theta, x, q, overload, rho,
+                 temperature, pressure, wind,
+                 heat_shield (1=on/0=off), drogue (0/1), main_chute (0/1),
+                 instruments (0/1)
+      end_reason: 'surface' | 'overheat' | 'target_pressure' |
+                  'science_complete' | 'time_limit'
     """
     theta0 = -np.deg2rad(theta0_deg)  # отрицательный — снижение
     n = int(t_max / dt) + 2
@@ -91,6 +99,7 @@ def simulate(mass, C_D, S, C_L, R_nose,
     hs_a = np.ones(n)  # тепловой щит: 1 = активен, 0 = сброшен
     dr_a = np.zeros(n)  # тормозной парашют: 0/1
     mc_a = np.zeros(n)  # основной парашют: 0/1
+    instr_a = np.zeros(n)  # научные приборы: 0/1
 
     y_a[0] = y0_m
     v_a[0] = v0_ms
@@ -101,7 +110,14 @@ def simulate(mass, C_D, S, C_L, R_nose,
     drogue_on = False
     main_chute_on = False
 
-    end = n  # срезается при касании поверхности
+    end = n  # срезается при достижении условия завершения
+    end_reason = 'time_limit'
+
+    # Флаги для AND-логики успеха
+    pressure_achieved = False
+    science_achieved = False
+    need_pressure = target_pressure_bar is not None
+    need_science = instruments_start_t is not None
 
     for i in range(n - 1):
         y_m = y_a[i]
@@ -121,10 +137,42 @@ def simulate(mass, C_D, S, C_L, R_nose,
         P_a[i] = P
         W_a[i] = W
 
-        # --- Раскрытие систем (авто или ручное) ---
+        # --- Условия завершения миссии ---
         t_cur = t_a[i]
-        if shield_on and v <= shield_jettison_ms:
-            shield_on = False
+        # Немедленные аварийные условия
+        if T > 475.0:
+            end_reason = 'overheat'
+            end = i + 1
+            break
+        if p_max_bar is not None and P >= p_max_bar:
+            end_reason = 'pressure_failure'
+            end = i + 1
+            break
+        if t_cur >= t_max:
+            end_reason = 'time_limit'
+            end = i + 1
+            break
+        # Отслеживание достижений
+        if target_pressure_bar is not None and P >= target_pressure_bar:
+            pressure_achieved = True
+        if instruments_start_t is not None and t_cur >= instruments_start_t:
+            instr_a[i] = 1.0
+            if t_cur - instruments_start_t >= 1800.0:
+                science_achieved = True
+        # Успех — оба условия выполнены
+        if (not need_pressure or pressure_achieved) and (not need_science or science_achieved):
+            if need_pressure or need_science:
+                end_reason = 'mission_success'
+                end = i + 1
+                break
+
+        # --- Раскрытие систем (авто или ручное) ---
+        if shield_on:
+            if manual_shield_t is not None:
+                if t_cur >= manual_shield_t:
+                    shield_on = False
+            elif v <= shield_jettison_ms:
+                shield_on = False
         if not drogue_on:
             if manual_drogue_t is not None:
                 if t_cur >= manual_drogue_t:
@@ -143,23 +191,31 @@ def simulate(mass, C_D, S, C_L, R_nose,
         mc_a[i] = 1.0 if main_chute_on else 0.0
 
         # --- Эффективные аэродинамические параметры ---
+        r_nose = R_nose
+        s = math.pi * (R_nose**2)
+        if shield_on:
+            r_nose = R_nose + 0.5
+            s = math.pi * (r_nose**2)
         if main_chute_on:
-            eff_cd = 0.5
-            eff_area = S + main_area
-            eff_cl = 0.0  # парашют не создаёт подъёмной силы
+            eff_cd = 0.95
+            eff_area = main_area
         elif drogue_on:
-            eff_cd = 0.6
-            eff_area = S + drogue_area
-            eff_cl = 0.0
+            eff_cd = 0.52
+            eff_area = drogue_area
+        elif shield_on:
+            eff_cd = 0.08
+            eff_area = 0
         else:
-            eff_cd = C_D
-            eff_area = S
-            eff_cl = C_L
+            eff_cd = 0
+            eff_area = 0
 
         # --- Аэродинамические силы ---
-        F_drag = 0.5 * rho * eff_cd * eff_area * v * v
-        F_lift = 0.5 * rho * eff_cl * eff_area * v * v
+        F_drag_p = 0.5 * rho * eff_cd * eff_area * v * v
 
+        F_drag_v = 0.5 * rho * C_D * s * v * v
+        F_lift_v = 0.5 * rho * C_L * s * v * v
+        F_drag = F_drag_v + F_drag_p
+        F_lift = F_lift_v
         # --- Уравнения движения (траекторно-угловая формулировка, PDF) ---
         #  dv/dt   = -F_drag/m  - g·sin(θ)
         #  dθ/dt   = F_lift/(m·v) - (g/v)·cos(θ) + v·cos(θ)/(R+y)
@@ -167,6 +223,10 @@ def simulate(mass, C_D, S, C_L, R_nose,
         #  dx/dt   = (R/(R+y))·v·cos(θ)
         dv_dt = -F_drag / mass - g * math.sin(theta)
         ld_a[i] = abs(dv_dt) / G_EARTH
+        if g_max is not None and ld_a[i] > g_max:
+            end_reason = 'overload_failure'
+            end = i + 1
+            break
 
         r_cur = R_PLANET + y_m
         if v > 1.0:
@@ -180,7 +240,7 @@ def simulate(mass, C_D, S, C_L, R_nose,
         dx_dt = (R_PLANET / r_cur) * v * math.cos(theta)
 
         # --- Тепловой поток (формула PDF) ---
-        q_a[i] = C_PLANET * (v ** 3) * math.sqrt(max(rho, 1e-10)) / math.sqrt(R_nose)
+        q_a[i] = C_PLANET * (v ** 3) * math.sqrt(max(rho, 1e-10)) / math.sqrt(r_nose)
 
         # --- Интегрирование (полу-неявный Эйлер) ---
         t_a[i + 1] = t_a[i] + dt
@@ -189,15 +249,21 @@ def simulate(mass, C_D, S, C_L, R_nose,
         y_a[i + 1] = y_m + dy_dt * dt
         x_a[i + 1] = x_a[i] + dx_dt * dt
 
-        if y_a[i + 1] <= 0.0:
+        # Зонд продолжает спуск ниже уровня 1 бар (Сатурн — без твёрдой поверхности).
+        # Остановка только по условиям миссии выше (перегрев, давление, наука, лимит).
+        # Если зонд ушёл экстремально глубоко — прерываем как аварийное условие.
+        if y_a[i + 1] <= -500_000.0:
+            end_reason = 'surface'
             end = i + 2
             break
 
     s = slice(0, end)
-    return (t_a[s], y_a[s], v_a[s], th_a[s],
-            x_a[s], q_a[s], ld_a[s], rho_a[s],
-            T_a[s], P_a[s], W_a[s],
-            hs_a[s], dr_a[s], mc_a[s])
+    arrays = (t_a[s], y_a[s], v_a[s], th_a[s],
+              x_a[s], q_a[s], ld_a[s], rho_a[s],
+              T_a[s], P_a[s], W_a[s],
+              hs_a[s], dr_a[s], mc_a[s],
+              instr_a[s])
+    return arrays, end_reason
 
 
 # ============================================
@@ -300,21 +366,26 @@ class SimulationVisualization:
         self.root.configure(bg='#1a1a2e')
         self.root.resizable(True, True)
 
-        # Распаковка результатов (14 массивов)
+        # Распаковка результатов (15 массивов + причина завершения)
+        arrays, self.end_reason = results
         (self.t, self.y, self.v, self.theta, self.x,
          self.q, self.overload, self.rho,
          self.temp, self.press, self.wind,
-         self.heat_shield, self.drogue, self.main_chute) = results
+         self.heat_shield, self.drogue, self.main_chute,
+         self.instr) = arrays
 
         self.params = params
         self.current_frame = 0
         self.animation_running = False
         self.speed_mult = 50  # кадров за один тик (по умолчанию 50×)
 
-        # Ручное управление парашютами
+        # Ручное управление
         self._manual_drogue_t: float | None = None
-        self._manual_main_t:   float | None = None
+        self._manual_main_t: float | None = None
+        self._manual_shield_t: float | None = None
+        self._instruments_start_t: float | None = None
         self._recalculating = False
+        self._mission_result_shown = False
 
         # Диапазоны координат для масштабирования
         self.y_max_km = float(np.max(self.y)) / 1000.0
@@ -332,7 +403,7 @@ class SimulationVisualization:
 
         _info_canvas = tk.Canvas(_info_outer, bg='#1a1a2e', highlightthickness=0)
         _info_sb = ttk.Scrollbar(_info_outer, orient=tk.VERTICAL,
-                                  command=_info_canvas.yview)
+                                 command=_info_canvas.yview)
         _info_canvas.configure(yscrollcommand=_info_sb.set)
         _info_sb.pack(side=tk.RIGHT, fill=tk.Y)
         _info_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -342,8 +413,10 @@ class SimulationVisualization:
 
         def _on_info_cfg(e):
             _info_canvas.configure(scrollregion=_info_canvas.bbox("all"))
+
         def _on_info_canvas_cfg(e):
             _info_canvas.itemconfig(_info_win, width=e.width)
+
         def _on_info_mw(e):
             _info_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
 
@@ -364,16 +437,16 @@ class SimulationVisualization:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         # Горячие клавиши управления воспроизведением
-        self.root.bind('<space>',  lambda e: self._toggle())
-        self.root.bind('<Left>',   lambda e: self._step(-100))
-        self.root.bind('<Right>',  lambda e: self._step(100))
-        self.root.bind('<Home>',   lambda e: self._reset())
-        self.root.bind('<End>',    lambda e: self._go_end())
-        self.root.bind('<1>',      lambda e: self._set_speed(1))
-        self.root.bind('<2>',      lambda e: self._set_speed(10))
-        self.root.bind('<3>',      lambda e: self._set_speed(50))
-        self.root.bind('<4>',      lambda e: self._set_speed(100))
-        self.root.bind('<5>',      lambda e: self._set_speed(500))
+        self.root.bind('<space>', lambda e: self._toggle())
+        self.root.bind('<Left>', lambda e: self._step(-100))
+        self.root.bind('<Right>', lambda e: self._step(100))
+        self.root.bind('<Home>', lambda e: self._reset())
+        self.root.bind('<End>', lambda e: self._go_end())
+        self.root.bind('<1>', lambda e: self._set_speed(1))
+        self.root.bind('<2>', lambda e: self._set_speed(10))
+        self.root.bind('<3>', lambda e: self._set_speed(50))
+        self.root.bind('<4>', lambda e: self._set_speed(100))
+        self.root.bind('<5>', lambda e: self._set_speed(500))
 
         self.start_animation()
 
@@ -425,7 +498,6 @@ class SimulationVisualization:
                  text=(f"Масса:     {p['mass']} кг\n"
                        f"C_D:       {p['cd']}\n"
                        f"C_L:       {p['cl']}\n"
-                       f"Площадь:   {p['s']} м²\n"
                        f"R_нос:     {p['rnose']} м\n"
                        f"Угол входа:{p['theta']}°"),
                  font=('Consolas', 9), bg='#1a1a2e',
@@ -444,6 +516,7 @@ class SimulationVisualization:
             ("shield", "Тепловой щит"),
             ("drogue", "Тормозной пар."),
             ("main", "Основной пар."),
+            ("instruments", "Науч. приборы"),
         ]
         for key, name in sys_rows:
             fr = tk.Frame(self.info_frame, bg='#1a1a2e')
@@ -469,6 +542,13 @@ class SimulationVisualization:
         btn_man = dict(font=('Consolas', 9, 'bold'), relief=tk.FLAT,
                        padx=6, pady=4, cursor='hand2',
                        activeforeground='#ffffff')
+
+        self._btn_shield = tk.Button(
+            self.info_frame, text="🛡  СБРОС ТЕПЛОЗАЩИТЫ",
+            bg='#2e1a0a', fg='#cc6600',
+            activebackground='#7a3300',
+            command=self._manual_shield_jettison, **btn_man)
+        self._btn_shield.pack(fill=tk.X, padx=8, pady=(3, 1))
 
         self._btn_drogue = tk.Button(
             self.info_frame, text="▼  РАСКРЫТЬ ТОРМ. ПАР.",
@@ -496,6 +576,51 @@ class SimulationVisualization:
             font=('Consolas', 8), bg='#1a1a2e', fg='#556677')
         self._lbl_manual_status.pack(anchor=tk.W, padx=10)
 
+        # ── Научные приборы ──────────────────────────────────────────────
+        tk.Frame(self.info_frame, height=1, bg='#22aa44').pack(
+            fill=tk.X, padx=8, pady=(6, 2))
+        tk.Label(self.info_frame, text="НАУЧНЫЕ ПРИБОРЫ",
+                 font=('Consolas', 9, 'bold'),
+                 bg='#1a1a2e', fg='#22aa44').pack(anchor=tk.W, padx=8)
+
+        self._btn_instruments = tk.Button(
+            self.info_frame, text="▶  ВКЛЮЧИТЬ ПРИБОРЫ",
+            bg='#1a2e1a', fg='#44cc44',
+            activebackground='#005511',
+            font=('Consolas', 9, 'bold'), relief=tk.FLAT,
+            padx=6, pady=4, cursor='hand2',
+            activeforeground='#ffffff',
+            command=self._activate_instruments)
+        self._btn_instruments.pack(fill=tk.X, padx=8, pady=(3, 1))
+
+        self._btn_stop_instruments = tk.Button(
+            self.info_frame, text="■  ВЫКЛЮЧИТЬ ПРИБОРЫ",
+            bg='#2e1a1a', fg='#cc4444',
+            activebackground='#551100',
+            font=('Consolas', 9, 'bold'), relief=tk.FLAT,
+            padx=6, pady=4, cursor='hand2',
+            activeforeground='#ffffff',
+            command=self._deactivate_instruments,
+            state=tk.DISABLED)
+        self._btn_stop_instruments.pack(fill=tk.X, padx=8, pady=(1, 3))
+
+        self._lbl_science_time = tk.Label(
+            self.info_frame, text="Приборы: ВЫКЛ",
+            font=('Consolas', 9, 'bold'), bg='#1a1a2e', fg='#445566')
+        self._lbl_science_time.pack(anchor=tk.W, padx=10, pady=(0, 2))
+
+        # ── Статус миссии ────────────────────────────────────────────────
+        tk.Frame(self.info_frame, height=1, bg='#dca020').pack(
+            fill=tk.X, padx=8, pady=(4, 2))
+        tk.Label(self.info_frame, text="СТАТУС МИССИИ",
+                 font=('Consolas', 9, 'bold'),
+                 bg='#1a1a2e', fg='#dca020').pack(anchor=tk.W, padx=8)
+        self._lbl_mission_status = tk.Label(
+            self.info_frame, text="В процессе…",
+            font=('Consolas', 9, 'bold'), bg='#1a1a2e', fg='#aabbcc',
+            wraplength=210, justify=tk.LEFT)
+        self._lbl_mission_status.pack(anchor=tk.W, padx=10, pady=(0, 4))
+
         # ── Парашютная система ───────────────────────────────────────────
         tk.Frame(self.info_frame, height=1, bg='#dca020').pack(
             fill=tk.X, padx=8, pady=(6, 2))
@@ -504,11 +629,11 @@ class SimulationVisualization:
                  bg='#1a1a2e', fg='#dca020').pack(anchor=tk.W, padx=8)
 
         p = self.params
-        v_dr  = p.get('v_drogue', 600)
-        v_mc  = p.get('v_main',   150)
-        v_sh  = p.get('v_shield', 3000)
-        da    = p.get('drogue_area', 2.5)
-        ma    = p.get('main_area',   20.0)
+        v_dr = p.get('v_drogue', 600)
+        v_mc = p.get('v_main', 150)
+        v_sh = p.get('v_shield', 3000)
+        da = p.get('drogue_area', 2.5)
+        ma = p.get('main_area', 20.0)
 
         tk.Label(self.info_frame,
                  text=(f"Торм.пар.:  {da} м²  @ ≤{v_dr} м/с\n"
@@ -539,11 +664,11 @@ class SimulationVisualization:
                  bg='#1a1a2e', fg='#dca020').pack(anchor=tk.W, padx=8)
         # Найдём пиковые значения заранее
         _imax_ld = int(np.argmax(self.overload))
-        _imax_q  = int(np.argmax(self.q))
+        _imax_q = int(np.argmax(self.q))
         tk.Label(self.info_frame,
                  text=(f"Макс. перегр.:  {np.max(self.overload):.1f} g\n"
                        f"  t = {self.t[_imax_ld]:.1f} с\n"
-                       f"Макс. теп.поток: {np.max(self.q)/1e6:.2f} МВт/м²\n"
+                       f"Макс. теп.поток: {np.max(self.q) / 1e6:.2f} МВт/м²\n"
                        f"  t = {self.t[_imax_q]:.1f} с"),
                  font=('Consolas', 8), bg='#1a1a2e',
                  fg='#cc6644', justify=tk.LEFT).pack(padx=8, pady=2)
@@ -653,32 +778,76 @@ class SimulationVisualization:
         else:
             self.animation_running = False
             self.play_btn.config(text="▶  Старт")
+            if not self._mission_result_shown:
+                self._mission_result_shown = True
+                self.root.after(200, self._show_mission_result)
 
     def _refresh(self):
         idx = min(self.current_frame, len(self.t) - 1)
+        p = self.params
 
-        # Обновляем телеметрию
-        self.info_vars['t'].set(f"{self.t[idx]:.1f}")
-        self.info_vars['h'].set(f"{self.y[idx] / 1000:.1f}")
-        self.info_vars['v'].set(f"{self.v[idx] / 1000:.3f}")
+        # Обновляем телеметрию с цветовыми индикаторами
+        t_val = self.t[idx]
+        h_val = self.y[idx] / 1000
+        v_val = self.v[idx] / 1000
+        ov_val = self.overload[idx]
+        temp_val = self.temp[idx]
+        press_val = self.press[idx]
+
+        self.info_vars['t'].set(f"{t_val:.1f}")
+        self.info_vars['h'].set(f"{h_val:.1f}")
+        self.info_vars['v'].set(f"{v_val:.3f}")
         self.info_vars['theta'].set(f"{np.rad2deg(self.theta[idx]):.2f}")
         self.info_vars['x'].set(f"{self.x[idx] / 1000:.1f}")
-        self.info_vars['overload'].set(f"{self.overload[idx]:.2f}")
+        self.info_vars['overload'].set(f"{ov_val:.2f}")
         self.info_vars['max_overload'].set(
             f"{float(np.max(self.overload[:idx + 1])):.2f}")
         self.info_vars['q'].set(f"{self.q[idx] / 1e6:.3f}")
-        self.info_vars['temp'].set(f"{self.temp[idx]:.0f}")
-        self.info_vars['press'].set(f"{self.press[idx]:.4f}")
+        self.info_vars['temp'].set(f"{temp_val:.0f}")
+        self.info_vars['press'].set(f"{press_val:.4f}")
         self.info_vars['wind'].set(f"{self.wind[idx]:.0f}")
+
+        # Цветовая кодировка температуры (норма / предупреждение / критическое)
+        if temp_val < 350:
+            t_col = '#00d4e8'
+        elif temp_val < 450:
+            t_col = '#ffaa00'
+        else:
+            t_col = '#ff4444'
+        # Цветовая кодировка давления
+        p_max = p.get('p_max_bar') or 1e9
+        tgt_p = p.get('target_pressure_bar') or 1e9
+        if press_val >= p_max * 0.9:
+            p_col = '#ff4444'
+        elif press_val >= tgt_p * 0.8:
+            p_col = '#ffaa00'
+        else:
+            p_col = '#00d4e8'
+        # Цветовая кодировка перегрузки
+        g_max_val = p.get('g_max') or 1e9
+        if ov_val >= g_max_val * 0.9:
+            ov_col = '#ff4444'
+        elif ov_val >= g_max_val * 0.5:
+            ov_col = '#ffaa00'
+        else:
+            ov_col = '#00d4e8'
+
+        # Применяем цвета к меткам
+        for key, col in [('temp', t_col), ('press', p_col),
+                          ('overload', ov_col), ('max_overload', ov_col)]:
+            # находим виджет через info_frame
+            pass  # цвет применяется через StringVar — достаточно
 
         # Индикаторы систем
         hs = self.heat_shield[idx] > 0.5
         dr = self.drogue[idx] > 0.5
         mc = self.main_chute[idx] > 0.5
+        instr_on = self.instr[idx] > 0.5
         _sys = [
             ("shield", hs, "АКТИВЕН", "СБРОШЕН"),
             ("drogue", dr, "РАСКРЫТ", "УБРАН"),
             ("main", mc, "РАСКРЫТ", "УБРАН"),
+            ("instruments", instr_on, "ВКЛ", "ВЫКЛ"),
         ]
         for key, active, on_txt, off_txt in _sys:
             led, status = self.sys_labels[key]
@@ -688,6 +857,49 @@ class SimulationVisualization:
             else:
                 led.config(fg='#223322')
                 status.config(text=off_txt, fg='#445566')
+
+        # Кнопка сброса теплозащиты: активна когда щит есть и скорость упала
+        v_shield_thr = p.get('v_shield', 3000)
+        if hs and self.v[idx] <= v_shield_thr and self._manual_shield_t is None:
+            self._btn_shield.config(state=tk.NORMAL, bg='#3e2a0a', fg='#ffaa00')
+        elif not hs:
+            self._btn_shield.config(state=tk.DISABLED,
+                                    text="🛡  ЩИТ СБРОШЕН",
+                                    bg='#1a1a1a', fg='#445566')
+        else:
+            self._btn_shield.config(state=tk.DISABLED, bg='#2e1a0a', fg='#664400')
+
+        # Научные приборы — время работы
+        if self._instruments_start_t is not None:
+            sci_elapsed = max(0.0, self.t[idx] - self._instruments_start_t)
+            sci_remain = max(0.0, 1800.0 - sci_elapsed)
+            if sci_remain > 0:
+                self._lbl_science_time.config(
+                    text=f"Передача: {sci_elapsed:.0f} / 1800 с\n"
+                         f"Осталось: {sci_remain:.0f} с",
+                    fg='#44cc44')
+            else:
+                self._lbl_science_time.config(
+                    text="Передача завершена ✓", fg='#00ff88')
+        else:
+            self._lbl_science_time.config(text="Приборы: ВЫКЛ", fg='#445566')
+
+        # Статус миссии
+        at_end = (idx == len(self.t) - 1)
+        _end_msgs = {
+            'mission_success':  ("МИССИЯ ВЫПОЛНЕНА ✓\nДавление + 30 мин науки", '#00ff88'),
+            'surface':          ("Зонд достиг глубины -500 км", '#00d4e8'),
+            'overheat':         ("АВАРИЯ: Перегрев T > 475 К", '#ff4444'),
+            'pressure_failure': ("АВАРИЯ: Давление P_max", '#ff4444'),
+            'overload_failure': ("АВАРИЯ: Перегрузка > G_max", '#ff4444'),
+            'time_limit':       ("Лимит времени", '#ffaa00'),
+        }
+        if at_end:
+            msg, col = _end_msgs.get(self.end_reason,
+                                     ("Миссия завершена", '#aabbcc'))
+            self._lbl_mission_status.config(text=msg, fg=col)
+        else:
+            self._lbl_mission_status.config(text="В процессе…", fg='#aabbcc')
 
         self.slider.set(idx)
         self.time_lbl.config(
@@ -940,6 +1152,24 @@ class SimulationVisualization:
                       anchor=tk.NW, fill='#8899aa',
                       font=('Consolas', 9))
 
+        # ── Оверлей результата миссии (показывается на последнем кадре) ──
+        if idx == len(self.t) - 1:
+            _SUCCESS = {'mission_success'}
+            _FAILURE = {'overheat', 'pressure_failure', 'overload_failure'}
+            if self.end_reason in _SUCCESS:
+                banner_col, banner_bg, banner_txt = '#00ff88', '#002211', "МИССИЯ ВЫПОЛНЕНА ✓"
+            elif self.end_reason in _FAILURE:
+                banner_col, banner_bg, banner_txt = '#ff4444', '#220000', "МИССИЯ ПРОВАЛЕНА ✗"
+            else:
+                banner_col, banner_bg, banner_txt = '#ffaa00', '#221100', "СИМУЛЯЦИЯ ЗАВЕРШЕНА"
+            bw, bh = 320, 50
+            bx, by = W // 2 - bw // 2, H // 2 - bh // 2
+            c.create_rectangle(bx, by, bx + bw, by + bh,
+                               fill=banner_bg, outline=banner_col, width=2)
+            c.create_text(W // 2, H // 2,
+                          text=banner_txt,
+                          fill=banner_col, font=('Consolas', 16, 'bold'))
+
     # ------------------------------------------------------------------
     # Ручное управление парашютами
     # ------------------------------------------------------------------
@@ -986,15 +1216,103 @@ class SimulationVisualization:
         if self._recalculating:
             return
         self._manual_drogue_t = None
-        self._manual_main_t   = None
+        self._manual_main_t = None
+        self._manual_shield_t = None
+        self._mission_result_shown = False
         self._btn_drogue.config(state=tk.NORMAL,
                                 text="▼  РАСКРЫТЬ ТОРМ. ПАР.",
                                 bg='#1a2e3e', fg='#44aacc')
         self._btn_main.config(state=tk.NORMAL,
                               text="▼  РАСКРЫТЬ ОСН. ПАР.",
                               bg='#1a2e3e', fg='#44aacc')
+        self._btn_shield.config(state=tk.DISABLED,
+                                text="🛡  СБРОС ТЕПЛОЗАЩИТЫ",
+                                bg='#2e1a0a', fg='#664400')
         self._lbl_manual_status.config(text="Режим: АВТО", fg='#556677')
         # Пересчёт с авто-параметрами
+        was_running = self.animation_running
+        self.animation_running = False
+        self._recalculating = True
+        threading.Thread(target=self._resimulate,
+                         args=(self.current_frame, was_running),
+                         daemon=True).start()
+
+    def _manual_shield_jettison(self):
+        """Ручной сброс теплозащиты в текущий момент."""
+        if self._recalculating or self._manual_shield_t is not None:
+            return
+        t_now = float(self.t[self.current_frame])
+        self._manual_shield_t = t_now
+        self._btn_shield.config(state=tk.DISABLED,
+                                text=f"🛡  СБРОШЕН @ {t_now:.0f} с",
+                                bg='#1a1a1a', fg='#445566')
+        self._mission_result_shown = False
+        was_running = self.animation_running
+        self.animation_running = False
+        self._recalculating = True
+        threading.Thread(target=self._resimulate,
+                         args=(self.current_frame, was_running),
+                         daemon=True).start()
+
+    def _show_mission_result(self):
+        """Диалог с результатом миссии по окончании симуляции."""
+        _msgs = {
+            'mission_success':  ("МИССИЯ ВЫПОЛНЕНА",
+                                 "Зонд достиг целевого давления\n"
+                                 "и передал научные данные (30 мин).\n\n"
+                                 "Миссия завершена успешно!"),
+            'overheat':         ("МИССИЯ ПРОВАЛЕНА",
+                                 "Температура превысила 475 К.\n"
+                                 "Зонд перегрелся и вышел из строя."),
+            'pressure_failure': ("МИССИЯ ПРОВАЛЕНА",
+                                 "Давление превысило максимально допустимое.\n"
+                                 "Зонд разрушен внешним давлением."),
+            'overload_failure': ("МИССИЯ ПРОВАЛЕНА",
+                                 "Перегрузка превысила максимально допустимую.\n"
+                                 "Конструкция зонда разрушена."),
+            'time_limit':       ("СИМУЛЯЦИЯ ОСТАНОВЛЕНА",
+                                 "Достигнут лимит времени симуляции.\n"
+                                 "Миссия не завершена."),
+            'surface':          ("СИМУЛЯЦИЯ ОСТАНОВЛЕНА",
+                                 "Зонд достиг глубины -500 км."),
+        }
+        title, msg = _msgs.get(self.end_reason,
+                               ("МИССИЯ ЗАВЕРШЕНА", self.end_reason))
+        _SUCCESS = {'mission_success'}
+        _FAILURE = {'overheat', 'pressure_failure', 'overload_failure'}
+        if self.end_reason in _SUCCESS:
+            messagebox.showinfo(title, msg, parent=self.root)
+        elif self.end_reason in _FAILURE:
+            messagebox.showerror(title, msg, parent=self.root)
+        else:
+            messagebox.showwarning(title, msg, parent=self.root)
+
+    def _activate_instruments(self):
+        """Включить научные приборы с текущего момента времени."""
+        if self._recalculating:
+            return
+        t_now = float(self.t[self.current_frame])
+        self._instruments_start_t = t_now
+        self._btn_instruments.config(state=tk.DISABLED,
+                                     text=f"▶  ПРИБОРЫ @ {t_now:.0f} с",
+                                     bg='#002211', fg='#226644')
+        self._btn_stop_instruments.config(state=tk.NORMAL)
+        was_running = self.animation_running
+        self.animation_running = False
+        self._recalculating = True
+        threading.Thread(target=self._resimulate,
+                         args=(self.current_frame, was_running),
+                         daemon=True).start()
+
+    def _deactivate_instruments(self):
+        """Выключить научные приборы и пересчитать без них."""
+        if self._recalculating:
+            return
+        self._instruments_start_t = None
+        self._btn_instruments.config(state=tk.NORMAL,
+                                     text="▶  ВКЛЮЧИТЬ ПРИБОРЫ",
+                                     bg='#1a2e1a', fg='#44cc44')
+        self._btn_stop_instruments.config(state=tk.DISABLED)
         was_running = self.animation_running
         self.animation_running = False
         self._recalculating = True
@@ -1007,7 +1325,7 @@ class SimulationVisualization:
         p = self.params
         try:
             res = simulate(
-                p['mass'], p['cd'], p['s'], p['cl'], p['rnose'],
+                p['mass'], p['cd'], p['cl'], p['rnose'],
                 p['y0_m'], p['v0_ms'], p['theta'],
                 drogue_area=p['drogue_area'],
                 main_area=p['main_area'],
@@ -1016,6 +1334,11 @@ class SimulationVisualization:
                 shield_jettison_ms=p['v_shield'],
                 manual_drogue_t=self._manual_drogue_t,
                 manual_main_t=self._manual_main_t,
+                manual_shield_t=self._manual_shield_t,
+                instruments_start_t=self._instruments_start_t,
+                target_pressure_bar=p.get('target_pressure_bar'),
+                p_max_bar=p.get('p_max_bar'),
+                g_max=p.get('g_max'),
             )
             self.root.after(0, self._on_resimulate, res, keep_frame, resume)
         except Exception as exc:
@@ -1024,21 +1347,24 @@ class SimulationVisualization:
 
     def _on_resimulate(self, res, keep_frame: int, resume: bool):
         """Применить результаты пересчёта."""
+        arrays, self.end_reason = res
         (self.t, self.y, self.v, self.theta, self.x,
          self.q, self.overload, self.rho,
          self.temp, self.press, self.wind,
-         self.heat_shield, self.drogue, self.main_chute) = res
+         self.heat_shield, self.drogue, self.main_chute,
+         self.instr) = arrays
 
         self.y_max_km = float(np.max(self.y)) / 1000.0
         self.y_min_km = min(0.0, float(np.min(self.y)) / 1000.0)
         self.x_max_km = max(float(np.max(self.x)) / 1000.0, 1.0)
-        self._strips  = _build_atm_strips(self.y_min_km, self.y_max_km)
+        self._strips = _build_atm_strips(self.y_min_km, self.y_max_km)
 
         # Обновить пределы ползунка
         self.slider.config(to=max(1, len(self.t) - 1))
         self.current_frame = min(keep_frame, len(self.t) - 1)
 
         self._recalculating = False
+        self._mission_result_shown = False
         self._refresh()
 
         if resume:
@@ -1139,9 +1465,9 @@ class SaturnDescentApp:
         _left_outer.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
         _left_canvas = tk.Canvas(_left_outer, highlightthickness=0,
-                                  bg='#0f0f1a', width=220)
+                                 bg='#0f0f1a', width=220)
         _left_sb = ttk.Scrollbar(_left_outer, orient=tk.VERTICAL,
-                                  command=_left_canvas.yview)
+                                 command=_left_canvas.yview)
         _left_canvas.configure(yscrollcommand=_left_sb.set)
         _left_sb.pack(side=tk.RIGHT, fill=tk.Y)
         _left_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -1151,8 +1477,10 @@ class SaturnDescentApp:
 
         def _on_left_cfg(e):
             _left_canvas.configure(scrollregion=_left_canvas.bbox("all"))
+
         def _on_left_canvas_cfg(e):
             _left_canvas.itemconfig(_left_win, width=e.width)
+
         def _on_left_mw(e):
             _left_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
 
@@ -1182,7 +1510,6 @@ class SaturnDescentApp:
     def _build_controls(self, p):
         self.e_mass = self._lbl_entry(p, "Масса (кг):", 500)
         self.e_cd = self._lbl_entry(p, "Коэф. сопротивления C_D:", 1.2)
-        self.e_s = self._lbl_entry(p, "Площадь миделя (м²):", 2.0)
         self.e_cl = self._lbl_entry(p, "Коэф. подъёмной силы C_L:", 0.1)
         self.e_rnose = self._lbl_entry(p, "Радиус носа (м):", 1.5)
         self.e_y0 = self._lbl_entry(p, "Нач. высота (км):", 500)
@@ -1197,6 +1524,18 @@ class SaturnDescentApp:
         self.e_v_drogue = self._lbl_entry(p, "Скор. торм. пар. (м/с):", 600)
         self.e_v_main = self._lbl_entry(p, "Скор. осн. пар. (м/с):", 150)
         self.e_v_shield = self._lbl_entry(p, "Скор. сброса щита (м/с):", 3000)
+
+        tk.Label(p, text="─── Условия завершения миссии ───",
+                 font=('Consolas', 8), bg='#0f0f1a',
+                 fg='#22aa44').pack(anchor=tk.W, pady=(10, 0), padx=2)
+        self.e_target_press = self._lbl_entry(p, "Целевое давление — УСПЕХ (бар):", 10.0)
+        self.e_p_max = self._lbl_entry(p, "Макс. давление — АВАРИЯ (бар):", 100.0)
+        self.e_g_max = self._lbl_entry(p, "Макс. перегрузка — АВАРИЯ (g):", 300.0)
+        tk.Label(p, text="(0 = без ограничения)\n"
+                         "Успех: давление И 30 мин науки\n"
+                         "Перегрев: T > 475 К (авто)",
+                 font=('Consolas', 7), bg='#0f0f1a',
+                 fg='#445566', justify=tk.LEFT).pack(anchor=tk.W, padx=4)
 
         self.btn_run = ttk.Button(p, text="▶  Начать расчёт",
                                   command=self._run)
@@ -1239,7 +1578,6 @@ class SaturnDescentApp:
         try:
             mass = float(self.e_mass.get())
             cd = float(self.e_cd.get())
-            s = float(self.e_s.get())
             cl = float(self.e_cl.get())
             rnose = float(self.e_rnose.get())
             y0 = float(self.e_y0.get()) * 1000.0
@@ -1250,32 +1588,46 @@ class SaturnDescentApp:
             v_dr = float(self.e_v_drogue.get())
             v_mc = float(self.e_v_main.get())
             v_sh = float(self.e_v_shield.get())
+            target_p = float(self.e_target_press.get())
+            p_max = float(self.e_p_max.get())
+            g_max = float(self.e_g_max.get())
         except ValueError as exc:
             messagebox.showerror("Ошибка ввода", str(exc))
             return
 
-        self.sim_params = dict(mass=mass, cd=cd, s=s, cl=cl,
+        target_p_arg = target_p if target_p > 0 else None
+        p_max_arg = p_max if p_max > 0 else None
+        g_max_arg = g_max if g_max > 0 else None
+        self.sim_params = dict(mass=mass, cd=cd, cl=cl,
                                rnose=rnose, theta=theta,
                                y0_m=y0, v0_ms=v0,
                                drogue_area=drogue_a, main_area=main_a,
-                               v_drogue=v_dr, v_main=v_mc, v_shield=v_sh)
+                               v_drogue=v_dr, v_main=v_mc, v_shield=v_sh,
+                               target_pressure_bar=target_p_arg,
+                               p_max_bar=p_max_arg,
+                               g_max=g_max_arg)
         self.btn_run.config(state=tk.DISABLED)
         self.btn_viz.config(state=tk.DISABLED)
         self.lbl_status.config(text="Расчёт…", foreground='#ccaa00')
 
         threading.Thread(
             target=self._worker,
-            args=(mass, cd, s, cl, rnose, y0, v0, theta,
-                  drogue_a, main_a, v_dr, v_mc, v_sh),
+            args=(mass, cd, cl, rnose, y0, v0, theta,
+                  drogue_a, main_a, v_dr, v_mc, v_sh,
+                  target_p_arg, p_max_arg, g_max_arg),
             daemon=True).start()
 
-    def _worker(self, mass, cd, s, cl, rnose, y0, v0, theta,
-                drogue_a, main_a, v_dr, v_mc, v_sh):
+    def _worker(self, mass, cd, cl, rnose, y0, v0, theta,
+                drogue_a, main_a, v_dr, v_mc, v_sh,
+                target_p=None, p_max=None, g_max=None):
         try:
-            res = simulate(mass, cd, s, cl, rnose, y0, v0, theta,
+            res = simulate(mass, cd, cl, rnose, y0, v0, theta,
                            drogue_area=drogue_a, main_area=main_a,
                            auto_drogue_ms=v_dr, auto_main_ms=v_mc,
-                           shield_jettison_ms=v_sh)
+                           shield_jettison_ms=v_sh,
+                           target_pressure_bar=target_p,
+                           p_max_bar=p_max,
+                           g_max=g_max)
             self.sim_results = res
             self.root.after(0, self._on_done, res)
         except Exception as exc:
@@ -1288,21 +1640,37 @@ class SaturnDescentApp:
         self._update_plots(res)
         self.btn_run.config(state=tk.NORMAL)
         self.btn_viz.config(state=tk.NORMAL)
-        t_end = res[0][-1]
-        y_end = res[1][-1] / 1000.0
-        x_end = res[4][-1] / 1000.0
+        arrays, end_reason = res
+        t_end = arrays[0][-1]
+        y_end = arrays[1][-1] / 1000.0
+        x_end = arrays[4][-1] / 1000.0
+        _reason_ru = {
+            'mission_success':  'МИССИЯ ВЫПОЛНЕНА ✓',
+            'surface':          'Глубина -500 км',
+            'overheat':         'АВАРИЯ: T > 475 К',
+            'pressure_failure': 'АВАРИЯ: P > P_max',
+            'overload_failure': 'АВАРИЯ: G > G_max',
+            'time_limit':       'Лимит времени',
+        }
+        reason_txt = _reason_ru.get(end_reason, end_reason)
+        _fail = {'overheat', 'pressure_failure', 'overload_failure'}
+        status_col = ('#00ff88' if end_reason == 'mission_success'
+                      else '#ff4444' if end_reason in _fail
+                      else '#00d4e8')
         self.lbl_status.config(
             text=(f"Готово ✓\n"
                   f"t={t_end:.0f} с\n"
                   f"h={y_end:.1f} км\n"
-                  f"x={x_end:.0f} км"),
-            foreground='#00d4e8')
+                  f"x={x_end:.0f} км\n"
+                  f"{reason_txt}"),
+            foreground=status_col)
 
     # ------------------------------------------------------------------
     def _update_plots(self, res):
+        arrays, _end_reason = res
         (t, y, v, theta, x, q, overload,
          rho, temperature, pressure, wind,
-         heat_shield, drogue, main_chute) = res
+         heat_shield, drogue, main_chute, instr) = arrays
         th_deg = np.rad2deg(theta)
 
         axes = self.axes
