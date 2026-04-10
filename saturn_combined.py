@@ -532,50 +532,6 @@ class SimulationVisualization:
             status.pack(side=tk.RIGHT)
             self.sys_labels[key] = (led, status)
 
-        # ── РУЧНОЕ УПРАВЛЕНИЕ ────────────────────────────────────────────
-        tk.Frame(self.info_frame, height=1, bg='#e94560').pack(
-            fill=tk.X, padx=8, pady=(6, 2))
-        tk.Label(self.info_frame, text="РУЧНОЕ УПРАВЛЕНИЕ",
-                 font=('Consolas', 9, 'bold'),
-                 bg='#1a1a2e', fg='#e94560').pack(anchor=tk.W, padx=8)
-
-        btn_man = dict(font=('Consolas', 9, 'bold'), relief=tk.FLAT,
-                       padx=6, pady=4, cursor='hand2',
-                       activeforeground='#ffffff')
-
-        self._btn_shield = tk.Button(
-            self.info_frame, text="🛡  СБРОС ТЕПЛОЗАЩИТЫ",
-            bg='#2e1a0a', fg='#cc6600',
-            activebackground='#7a3300',
-            command=self._manual_shield_jettison, **btn_man)
-        self._btn_shield.pack(fill=tk.X, padx=8, pady=(3, 1))
-
-        self._btn_drogue = tk.Button(
-            self.info_frame, text="▼  РАСКРЫТЬ ТОРМ. ПАР.",
-            bg='#1a2e3e', fg='#44aacc',
-            activebackground='#005577',
-            command=lambda: self._manual_deploy('drogue'), **btn_man)
-        self._btn_drogue.pack(fill=tk.X, padx=8, pady=(3, 1))
-
-        self._btn_main = tk.Button(
-            self.info_frame, text="▼  РАСКРЫТЬ ОСН. ПАР.",
-            bg='#1a2e3e', fg='#44aacc',
-            activebackground='#005577',
-            command=lambda: self._manual_deploy('main'), **btn_man)
-        self._btn_main.pack(fill=tk.X, padx=8, pady=1)
-
-        self._btn_reset_manual = tk.Button(
-            self.info_frame, text="↺  СБРОС РУЧНОГО",
-            bg='#2e1a1a', fg='#cc6644',
-            activebackground='#773300',
-            command=self._reset_manual, **btn_man)
-        self._btn_reset_manual.pack(fill=tk.X, padx=8, pady=(1, 3))
-
-        self._lbl_manual_status = tk.Label(
-            self.info_frame, text="Режим: АВТО",
-            font=('Consolas', 8), bg='#1a1a2e', fg='#556677')
-        self._lbl_manual_status.pack(anchor=tk.W, padx=10)
-
         # ── Научные приборы ──────────────────────────────────────────────
         tk.Frame(self.info_frame, height=1, bg='#22aa44').pack(
             fill=tk.X, padx=8, pady=(6, 2))
@@ -682,14 +638,6 @@ class SimulationVisualization:
                   command=lambda: self._jump_to_idx(_imax_q),
                   **btn_kw_sm).pack(side=tk.LEFT)
 
-        tk.Frame(self.info_frame, height=1, bg='#2a2a4e').pack(
-            fill=tk.X, padx=8, pady=4)
-        tk.Label(self.info_frame,
-                 text="Атмосфера: Cassini/Galileo\nтаблица T, P, ρ, ветер\n"
-                      "[Пробел] пауза  [←→] ±100 кадров\n"
-                      "[1-5] скорость  [Home] сброс",
-                 font=('Consolas', 7), bg='#1a1a2e',
-                 fg='#445566', justify=tk.LEFT).pack(padx=8)
 
     # ------------------------------------------------------------------
     # Правая панель — холст + кнопки управления
@@ -857,17 +805,6 @@ class SimulationVisualization:
             else:
                 led.config(fg='#223322')
                 status.config(text=off_txt, fg='#445566')
-
-        # Кнопка сброса теплозащиты: активна когда щит есть и скорость упала
-        v_shield_thr = p.get('v_shield', 3000)
-        if hs and self.v[idx] <= v_shield_thr and self._manual_shield_t is None:
-            self._btn_shield.config(state=tk.NORMAL, bg='#3e2a0a', fg='#ffaa00')
-        elif not hs:
-            self._btn_shield.config(state=tk.DISABLED,
-                                    text="🛡  ЩИТ СБРОШЕН",
-                                    bg='#1a1a1a', fg='#445566')
-        else:
-            self._btn_shield.config(state=tk.DISABLED, bg='#2e1a0a', fg='#664400')
 
         # Научные приборы — время работы
         if self._instruments_start_t is not None:
@@ -1064,7 +1001,7 @@ class SimulationVisualization:
             _draw_canopy(c,
                          pxp + tail_dx * 55, pyp + tail_dy * 55,
                          radius=36,
-                         open_angle=arad,  # "рот" обращён к носу
+                         open_angle=arad + math.pi,  # купол раскрыт к хвосту
                          fill='#c8ccd8', outline='#e0e4f0',
                          riser_col='#888898',
                          probe_x=pxp, probe_y=pyp)
@@ -1074,7 +1011,7 @@ class SimulationVisualization:
             _draw_canopy(c,
                          pxp + tail_dx * 30, pyp + tail_dy * 30,
                          radius=14,
-                         open_angle=arad,
+                         open_angle=arad + math.pi,
                          fill='#9090a0', outline='#b0b0c0',
                          riser_col='#606070',
                          probe_x=pxp, probe_y=pyp)
@@ -1107,9 +1044,9 @@ class SimulationVisualization:
                     r_t = int(min(255, 160 + self.v[idx] / 300) * alpha_f)
                     g_t = int(40 * alpha_f)
                     trail_hex = f'#{r_t:02x}{g_t:02x}00'
-                    # след тянется от носа в обратном направлении
-                    tx = pxp + nose_dx * (sz + k)
-                    ty = pyp + nose_dy * (sz + k)
+                    # след тянется от носа в хвостовом направлении
+                    tx = pxp + tail_dx * (sz + k)
+                    ty = pyp + tail_dy * (sz + k)
                     rr = max(1, int(4 * alpha_f))
                     c.create_oval(tx - rr, ty - rr, tx + rr, ty + rr,
                                   fill=trail_hex, outline='')
