@@ -1,25 +1,8 @@
-"""
-Saturn atmosphere model.
-Data sources:
-  - NASA Saturn Fact Sheet: https://nssdc.gsfc.nasa.gov/planetary/factsheet/saturnfact.html
-  - Galileo probe Jovian atmosphere entry (analogue data)
-  - Guillot T. (1999) "Interiors of Giant Planets Inside and Outside the Solar System"
-  - Folkner et al. (2006) Cassini radio occultation profiles
-
-Altitude is defined relative to the 1-bar pressure level (positive = above, negative = below).
-"""
-
 import math
 
-# ---------------------------------------------------------------------------
-# Tabulated atmosphere profile (altitude km → pressure bar, temp K, density kg/m³)
-# Derived from theoretical models and Cassini/Galileo analogue data.
-# Positive altitude = above 1-bar level; negative = below.
-# ---------------------------------------------------------------------------
-
-# (altitude_km, pressure_bar, temperature_K, density_kg_m3)
+# Зависимости давления, плотности, температуры от высоты
 _PROFILE = [
-    # High atmosphere / entry zone
+
     (400, 1.0e-7, 80.0, 3.0e-7),
     (300, 1.0e-6, 82.0, 3.5e-6),
     (200, 1.0e-5, 85.0, 3.4e-5),
@@ -29,15 +12,15 @@ _PROFILE = [
     (60, 2.0e-2, 108.0, 5.4e-2),
     (40, 1.0e-1, 118.0, 2.5e-1),
     (20, 4.0e-1, 126.0, 9.3e-1),
-    # 1-bar reference level
+
     (0, 1.0, 134.0, 2.2),
-    # Below 1-bar (cloud layers)
-    (-20, 2.5, 160.0, 4.6),  # upper ammonia clouds ~1.5 bar
-    (-50, 5.0, 200.0, 7.3),  # ammonium-hydrosulfide clouds ~3-5 bar
-    (-80, 10.0, 300.0, 10.0),  # water cloud top ~10 bar
+
+    (-20, 2.5, 160.0, 4.6),
+    (-50, 5.0, 200.0, 7.3),
+    (-80, 10.0, 300.0, 10.0),
     (-120, 25.0, 430.0, 17.0),
     (-170, 60.0, 700.0, 25.0),
-    (-200, 100.0, 1000.0, 30.0),  # probe destruction zone
+    (-200, 100.0, 1000.0, 30.0),
 ]
 
 _alts = [r[0] for r in _PROFILE]
@@ -47,7 +30,6 @@ _dens = [r[3] for r in _PROFILE]
 
 
 def _interp(alt_km: float, table_x: list, table_y: list) -> float:
-    """Linear interpolation (log-scale for pressure and density)."""
     if alt_km >= table_x[0]:
         return table_y[0]
     if alt_km <= table_x[-1]:
@@ -61,7 +43,6 @@ def _interp(alt_km: float, table_x: list, table_y: list) -> float:
 
 
 def _interp_log(alt_km: float, table_x: list, table_y: list) -> float:
-    """Log-linear interpolation — better for pressure and density."""
     if alt_km >= table_x[0]:
         return table_y[0]
     if alt_km <= table_x[-1]:
@@ -75,37 +56,27 @@ def _interp_log(alt_km: float, table_x: list, table_y: list) -> float:
     return table_y[-1]
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+R_PLANET = 58_232e3
+GM = 3.793e16
+G_EARTH = 9.81
 
-# --- Planetary constants (from PDF / NASA Saturn Fact Sheet) ---
-R_PLANET = 58_232e3   # m — equatorial radius of Saturn
-GM = 3.793e16         # m³/s² — gravitational parameter (G·M)
-G_EARTH = 9.81        # m/s² — Earth surface gravity (for g-load conversion)
+GRAVITY = 10.44
+SCALE_HEIGHT = 59_500
 
-GRAVITY = 10.44  # m/s² at 1-bar level (kept for backward compatibility)
-SCALE_HEIGHT = 59_500  # m — approximate scale height for density falloff
-
-# Exponential atmosphere model parameters (from PDF)
-RHO0 = 0.19           # kg/m³ — density at 1-bar level (y=0)
+RHO0 = 0.19
 
 
 def get_gravity(alt_m: float) -> float:
-    """Gravitational acceleration at altitude alt_m (metres above 1-bar level).
-    Uses inverse-square law: g = GM / (R_planet + y)²."""
     r = R_PLANET + alt_m
     return GM / (r * r)
 
 
 def get_density_exp(alt_m: float) -> float:
-    """Exponential atmosphere model: rho = rho0 · exp(-y / H_scale).
-    alt_m is in metres above 1-bar level."""
     import math
     return RHO0 * math.exp(-alt_m / SCALE_HEIGHT)
 
-# Wind profile: horizontal wind speed (m/s) vs altitude (km)
-# Saturn equatorial jet reaches ~500 m/s near the cloud tops
+
+# Ветра на высотах
 _WIND_PROFILE = [
     (400, 0.0),
     (200, 50.0),
@@ -119,7 +90,6 @@ _WIND_PROFILE = [
 _wind_alts = [r[0] for r in _WIND_PROFILE]
 _wind_speed = [r[1] for r in _WIND_PROFILE]
 
-# Cloud layer definitions for renderer
 CLOUD_LAYERS = [
     {"name": "Облака аммиака", "alt_km": -10, "color": (220, 200, 160), "thickness_km": 30},
     {"name": "Гидросульфид аммония", "alt_km": -50, "color": (180, 140, 100), "thickness_km": 30},
@@ -128,20 +98,16 @@ CLOUD_LAYERS = [
 
 
 def get_density(alt_km: float) -> float:
-    """Atmospheric density in kg/m³ at given altitude (km above 1-bar level)."""
     return _interp_log(alt_km, _alts, _dens)
 
 
 def get_temperature(alt_km: float) -> float:
-    """Temperature in K at given altitude."""
     return _interp(alt_km, _alts, _temps)
 
 
 def get_pressure(alt_km: float) -> float:
-    """Pressure in bar at given altitude."""
     return _interp_log(alt_km, _alts, _press)
 
 
 def get_wind_speed(alt_km: float) -> float:
-    """Horizontal wind speed in m/s (equatorial jet) at given altitude."""
     return _interp(alt_km, _wind_alts, _wind_speed)

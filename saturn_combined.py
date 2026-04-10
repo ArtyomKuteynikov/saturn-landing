@@ -1,16 +1,3 @@
-"""
-Saturn Descent Simulator — Combined Edition
-============================================
-Объединяет:
-  - Математическую модель спуска (НОЦ ПИШ задание 4)
-  - Реальную атмосферу Сатурна (Cassini/Galileo/NASA)
-  - Визуализацию по реальной угловой траектории (x, y)
-  - Ускорение событий (1×, 10×, 50×, 100×, 500×)
-  - Графики (высота, скорость, угол, траектория, перегрузка, тепловой поток)
-
-UI: tkinter + matplotlib
-"""
-
 import math
 import os
 import sys
@@ -25,23 +12,20 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-# Реальная атмосфера Сатурна из atmosphere.py
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atmosphere as atm
 
-# ============================================
 # ПЛАНЕТНЫЕ КОНСТАНТЫ
-# ============================================
-R_PLANET = atm.R_PLANET  # 58_232_000 m
-GM = atm.GM  # 3.793e16 m³/s²
-G_EARTH = atm.G_EARTH  # 9.81 m/s²
-C_PLANET = 1.5e-4  # постоянная теплового потока (PDF)
+
+R_PLANET = atm.R_PLANET
+GM = atm.GM
+G_EARTH = atm.G_EARTH
+C_PLANET = 1.5e-4
 
 
-# ============================================
 # МАТЕМАТИЧЕСКАЯ МОДЕЛЬ
-# Уравнения движения — угловая траектория (PDF НОЦ ПИШ)
-# ============================================
+# Уравнения движения
+
 def simulate(mass, C_D, C_L, R_nose,
              y0_m, v0_ms, theta0_deg,
              drogue_area=2.5, main_area=20.0,
@@ -54,35 +38,7 @@ def simulate(mass, C_D, C_L, R_nose,
              p_max_bar=None,
              g_max=None,
              dt: float = 0.1, t_max: float = 10800.0):
-    """
-    Integrate trajectory-angle equations of motion with heat shield & parachutes.
-
-    Parameters (SI):
-      mass            — probe mass [kg]
-      C_D             — drag coefficient (entry phase, with shield)
-      S               — frontal area [m²]
-      C_L             — lift coefficient
-      R_nose          — nose radius [m] (heat flux)
-      y0_m            — initial altitude above 1-bar level [m]
-      v0_ms           — initial speed [m/s]
-      theta0_deg      — entry angle below horizontal [°, positive]
-      drogue_area     — drogue parachute area [m²]
-      main_area       — main parachute area [m²]
-      auto_drogue_ms  — speed threshold for drogue auto-deploy [m/s]
-      auto_main_ms    — speed threshold for main chute auto-deploy [m/s]
-      shield_jettison_ms — speed at which heat shield is jettisoned [m/s]
-      dt              — integration step [s]
-      t_max           — max simulation time [s]
-
-    Returns tuple: (arrays_15, end_reason)
-      arrays_15: t, y, v, theta, x, q, overload, rho,
-                 temperature, pressure, wind,
-                 heat_shield (1=on/0=off), drogue (0/1), main_chute (0/1),
-                 instruments (0/1)
-      end_reason: 'surface' | 'overheat' | 'target_pressure' |
-                  'science_complete' | 'time_limit'
-    """
-    theta0 = -np.deg2rad(theta0_deg)  # отрицательный — снижение
+    theta0 = -np.deg2rad(theta0_deg)
     n = int(t_max / dt) + 2
 
     t_a = np.zeros(n)
@@ -110,10 +66,9 @@ def simulate(mass, C_D, C_L, R_nose,
     drogue_on = False
     main_chute_on = False
 
-    end = n  # срезается при достижении условия завершения
+    end = n
     end_reason = 'time_limit'
 
-    # Флаги для AND-логики успеха
     pressure_achieved = False
     science_achieved = False
     need_pressure = target_pressure_bar is not None
@@ -125,7 +80,7 @@ def simulate(mass, C_D, C_L, R_nose,
         theta = th_a[i]
         y_km = y_m / 1000.0
 
-        # --- Реальная атмосфера Сатурна ---
+        # атмосфера Сатурна
         rho = atm.get_density(y_km)
         T = atm.get_temperature(y_km)
         P = atm.get_pressure(y_km)
@@ -137,7 +92,7 @@ def simulate(mass, C_D, C_L, R_nose,
         P_a[i] = P
         W_a[i] = W
 
-        # --- Условия завершения миссии ---
+        #  Условия завершения миссии
         t_cur = t_a[i]
         # Немедленные аварийные условия
         if T > 475.0:
@@ -166,7 +121,7 @@ def simulate(mass, C_D, C_L, R_nose,
                 end = i + 1
                 break
 
-        # --- Раскрытие систем (авто или ручное) ---
+        # Раскрытие систем
         if shield_on:
             if manual_shield_t is not None:
                 if t_cur >= manual_shield_t:
@@ -190,12 +145,12 @@ def simulate(mass, C_D, C_L, R_nose,
         dr_a[i] = 1.0 if drogue_on else 0.0
         mc_a[i] = 1.0 if main_chute_on else 0.0
 
-        # --- Эффективные аэродинамические параметры ---
+        # аэродинамические параметры
         r_nose = R_nose
-        s = math.pi * (R_nose**2)
+        s = math.pi * (R_nose ** 2)
         if shield_on:
             r_nose = R_nose + 0.5
-            s = math.pi * (r_nose**2)
+            s = math.pi * (r_nose ** 2)
         if main_chute_on:
             eff_cd = 0.95
             eff_area = main_area
@@ -209,20 +164,20 @@ def simulate(mass, C_D, C_L, R_nose,
             eff_cd = 0
             eff_area = 0
 
-        # --- Аэродинамические силы ---
-        F_drag_p = 0.5 * rho * eff_cd * eff_area * v * v
+        # Аэродинамические силы
+        F_drag_p = 0.5 * rho * eff_cd * eff_area * v * v  # сопротивление парашютов
 
-        F_drag_v = 0.5 * rho * C_D * s * v * v
-        F_lift_v = 0.5 * rho * C_L * s * v * v
+        F_drag_v = 0.5 * rho * C_D * s * v * v  # сопротивление корпуса
+        F_lift_v = 0.5 * rho * C_L * s * v * v  # подъемная сила
         F_drag = F_drag_v + F_drag_p
         F_lift = F_lift_v
-        # --- Уравнения движения (траекторно-угловая формулировка, PDF) ---
-        #  dv/dt   = -F_drag/m  - g·sin(θ)
-        #  dθ/dt   = F_lift/(m·v) - (g/v)·cos(θ) + v·cos(θ)/(R+y)
-        #  dy/dt   = v·sin(θ)
-        #  dx/dt   = (R/(R+y))·v·cos(θ)
+        #  Уравнения движения
+        #  dv/dt = -F_drag/m  - g·sin(θ) Скорость
+        #  dθ/dt = F_lift/(m·v) - (g/v)·cos(θ) + v·cos(θ)/(R+y) Угол траектории
+        #  dy/dt = v·sin(θ) Высота
+        #  dx/dt = (R/(R+y))·v·cos(θ) Дальность
         dv_dt = -F_drag / mass - g * math.sin(theta)
-        ld_a[i] = abs(dv_dt) / G_EARTH
+        ld_a[i] = abs(dv_dt) / G_EARTH  # перегрузка
         if g_max is not None and ld_a[i] > g_max:
             end_reason = 'overload_failure'
             end = i + 1
@@ -239,10 +194,10 @@ def simulate(mass, C_D, C_L, R_nose,
         dy_dt = v * math.sin(theta)
         dx_dt = (R_PLANET / r_cur) * v * math.cos(theta)
 
-        # --- Тепловой поток (формула PDF) ---
+        # Тепловой поток
         q_a[i] = C_PLANET * (v ** 3) * math.sqrt(max(rho, 1e-10)) / math.sqrt(r_nose)
 
-        # --- Интегрирование (полу-неявный Эйлер) ---
+        #  Интегрирование
         t_a[i + 1] = t_a[i] + dt
         v_a[i + 1] = max(v + dv_dt * dt, 0.0)
         th_a[i + 1] = theta + dth_dt * dt
@@ -266,10 +221,8 @@ def simulate(mass, C_D, C_L, R_nose,
     return arrays, end_reason
 
 
-# ============================================
 # ЦВЕТ АТМОСФЕРЫ ПО ВЫСОТЕ
-# Используем тот же градиент, что и в pygame-рендерере
-# ============================================
+
 _ATM_GRAD = [
     (400, (5, 8, 14)),  # открытый космос
     (200, (12, 12, 20)),
@@ -317,19 +270,9 @@ def _build_atm_strips(y_min_km: float, y_max_km: float):
     return strips
 
 
-# ============================================
-# ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ — КУПОЛ ПАРАШЮТА
-# ============================================
 def _draw_canopy(c, cx_c, cy_c, radius,
                  open_angle, fill, outline, riser_col,
                  probe_x, probe_y):
-    """
-    Рисует купол парашюта в виде полукруга и стропы к зонду.
-
-    open_angle — угол (рад) в направлении от купола к носу зонда
-                 (т.е. купол "смотрит ртом" в эту сторону).
-    """
-    # Полукруг: от open_angle-90° до open_angle+90°
     pts = []
     for step in range(11):
         a = open_angle - math.pi / 2 + math.pi * step / 10
@@ -337,14 +280,13 @@ def _draw_canopy(c, cx_c, cy_c, radius,
                 cy_c + radius * math.sin(a)]
     c.create_polygon(pts, fill=fill, outline=outline, width=1)
 
-    # Стропы: два конца полукруга → центр зонда
     edge_l = (cx_c + radius * math.cos(open_angle - math.pi / 2),
               cy_c + radius * math.sin(open_angle - math.pi / 2))
     edge_r = (cx_c + radius * math.cos(open_angle + math.pi / 2),
               cy_c + radius * math.sin(open_angle + math.pi / 2))
     c.create_line(*edge_l, probe_x, probe_y, fill=riser_col, width=1)
     c.create_line(*edge_r, probe_x, probe_y, fill=riser_col, width=1)
-    # Центральная стропа
+
     c.create_line(cx_c + radius * math.cos(open_angle - math.pi / 4),
                   cy_c + radius * math.sin(open_angle - math.pi / 4),
                   probe_x, probe_y, fill=riser_col, width=1)
@@ -353,9 +295,6 @@ def _draw_canopy(c, cx_c, cy_c, radius,
                   probe_x, probe_y, fill=riser_col, width=1)
 
 
-# ============================================
-# ОКНО ВИЗУАЛИЗАЦИИ РЕАЛЬНОЙ ТРАЕКТОРИИ
-# ============================================
 class SimulationVisualization:
     SPEED_MULTS = [1, 10, 50, 100, 500]
 
@@ -379,7 +318,6 @@ class SimulationVisualization:
         self.animation_running = False
         self.speed_mult = 50  # кадров за один тик (по умолчанию 50×)
 
-        # Ручное управление
         self._manual_drogue_t: float | None = None
         self._manual_main_t: float | None = None
         self._manual_shield_t: float | None = None
@@ -387,16 +325,12 @@ class SimulationVisualization:
         self._recalculating = False
         self._mission_result_shown = False
 
-        # Диапазоны координат для масштабирования
         self.y_max_km = float(np.max(self.y)) / 1000.0
         self.y_min_km = min(0.0, float(np.min(self.y)) / 1000.0)
         self.x_max_km = max(float(np.max(self.x)) / 1000.0, 1.0)
 
-        # Полосы фона атмосферы (строятся один раз)
         self._strips = _build_atm_strips(self.y_min_km, self.y_max_km)
 
-        # --- Компоновка ---
-        # Левая панель: телеметрия (прокручиваемая)
         _info_outer = tk.Frame(self.root, bg='#1a1a2e', width=255)
         _info_outer.pack(side=tk.LEFT, fill=tk.Y, padx=(8, 0), pady=8)
         _info_outer.pack_propagate(False)
@@ -425,7 +359,6 @@ class SimulationVisualization:
         _info_canvas.bind('<MouseWheel>', _on_info_mw)
         self.info_frame.bind('<MouseWheel>', _on_info_mw)
 
-        # Правая панель: холст + управление
         self.viz_frame = tk.Frame(self.root, bg='#0a0a14')
         self.viz_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True,
                             padx=8, pady=8)
@@ -433,10 +366,8 @@ class SimulationVisualization:
         self._build_info_panel()
         self._build_viz_panel()
 
-        # Корректное закрытие: останавливаем анимацию
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        # Горячие клавиши управления воспроизведением
         self.root.bind('<space>', lambda e: self._toggle())
         self.root.bind('<Left>', lambda e: self._step(-100))
         self.root.bind('<Right>', lambda e: self._step(100))
@@ -450,9 +381,8 @@ class SimulationVisualization:
 
         self.start_animation()
 
-    # ------------------------------------------------------------------
     # Левая панель — телеметрия
-    # ------------------------------------------------------------------
+
     def _build_info_panel(self):
         tk.Label(self.info_frame, text="ТЕЛЕМЕТРИЯ",
                  font=('Consolas', 11, 'bold'),
@@ -504,7 +434,7 @@ class SimulationVisualization:
                  fg='#aabbcc', justify=tk.LEFT).pack(
             anchor=tk.W, padx=8, pady=4)
 
-        # ── Системы зонда (светодиоды) ───────────────────────────────────
+        #  Системы зонда
         tk.Frame(self.info_frame, height=1, bg='#dca020').pack(
             fill=tk.X, padx=8, pady=(6, 2))
         tk.Label(self.info_frame, text="СИСТЕМЫ",
@@ -521,7 +451,7 @@ class SimulationVisualization:
         for key, name in sys_rows:
             fr = tk.Frame(self.info_frame, bg='#1a1a2e')
             fr.pack(fill=tk.X, pady=2, padx=8)
-            # LED-кружок
+
             led = tk.Label(fr, text="●", font=('Consolas', 11),
                            bg='#1a1a2e', fg='#223322')
             led.pack(side=tk.LEFT)
@@ -532,7 +462,7 @@ class SimulationVisualization:
             status.pack(side=tk.RIGHT)
             self.sys_labels[key] = (led, status)
 
-        # ── Научные приборы ──────────────────────────────────────────────
+        #  Научные приборы
         tk.Frame(self.info_frame, height=1, bg='#22aa44').pack(
             fill=tk.X, padx=8, pady=(6, 2))
         tk.Label(self.info_frame, text="НАУЧНЫЕ ПРИБОРЫ",
@@ -565,7 +495,7 @@ class SimulationVisualization:
             font=('Consolas', 9, 'bold'), bg='#1a1a2e', fg='#445566')
         self._lbl_science_time.pack(anchor=tk.W, padx=10, pady=(0, 2))
 
-        # ── Статус миссии ────────────────────────────────────────────────
+        # Статус миссии
         tk.Frame(self.info_frame, height=1, bg='#dca020').pack(
             fill=tk.X, padx=8, pady=(4, 2))
         tk.Label(self.info_frame, text="СТАТУС МИССИИ",
@@ -577,7 +507,7 @@ class SimulationVisualization:
             wraplength=210, justify=tk.LEFT)
         self._lbl_mission_status.pack(anchor=tk.W, padx=10, pady=(0, 4))
 
-        # ── Парашютная система ───────────────────────────────────────────
+        # Парашютная система
         tk.Frame(self.info_frame, height=1, bg='#dca020').pack(
             fill=tk.X, padx=8, pady=(6, 2))
         tk.Label(self.info_frame, text="ПАРАШЮТЫ",
@@ -612,13 +542,13 @@ class SimulationVisualization:
                   command=lambda: self._jump_to_event('main'),
                   **btn_kw_sm).pack(side=tk.LEFT)
 
-        # ── Максимальные перегрузки ──────────────────────────────────────
+        #  Максимальные перегрузки
         tk.Frame(self.info_frame, height=1, bg='#dca020').pack(
             fill=tk.X, padx=8, pady=(4, 2))
         tk.Label(self.info_frame, text="ПРЕДЕЛЬНЫЕ ЗНАЧЕНИЯ",
                  font=('Consolas', 8, 'bold'),
                  bg='#1a1a2e', fg='#dca020').pack(anchor=tk.W, padx=8)
-        # Найдём пиковые значения заранее
+
         _imax_ld = int(np.argmax(self.overload))
         _imax_q = int(np.argmax(self.q))
         tk.Label(self.info_frame,
@@ -638,10 +568,6 @@ class SimulationVisualization:
                   command=lambda: self._jump_to_idx(_imax_q),
                   **btn_kw_sm).pack(side=tk.LEFT)
 
-
-    # ------------------------------------------------------------------
-    # Правая панель — холст + кнопки управления
-    # ------------------------------------------------------------------
     def _build_viz_panel(self):
         self.canvas = tk.Canvas(self.viz_frame, bg='#040408',
                                 highlightthickness=0)
@@ -694,7 +620,6 @@ class SimulationVisualization:
                                  font=('Consolas', 8))
         self.time_lbl.pack(pady=(0, 2))
 
-    # ------------------------------------------------------------------
     def _highlight_speed(self, active: int):
         for m, btn in self._speed_btns.items():
             if m == active:
@@ -706,9 +631,6 @@ class SimulationVisualization:
         self.speed_mult = mult
         self._highlight_speed(mult)
 
-    # ------------------------------------------------------------------
-    # Анимация
-    # ------------------------------------------------------------------
     def start_animation(self):
         self.animation_running = True
         self._tick()
@@ -718,8 +640,7 @@ class SimulationVisualization:
             return
         n = len(self.t)
         if self.current_frame < n - 1:
-            # Фиксированная задержка 40 мс (~25 fps), скорость регулируется
-            # числом кадров, пропускаемых за один тик.
+
             self.current_frame = min(self.current_frame + self.speed_mult, n - 1)
             self._refresh()
             self.root.after(40, self._tick)
@@ -734,7 +655,6 @@ class SimulationVisualization:
         idx = min(self.current_frame, len(self.t) - 1)
         p = self.params
 
-        # Обновляем телеметрию с цветовыми индикаторами
         t_val = self.t[idx]
         h_val = self.y[idx] / 1000
         v_val = self.v[idx] / 1000
@@ -780,13 +700,11 @@ class SimulationVisualization:
         else:
             ov_col = '#00d4e8'
 
-        # Применяем цвета к меткам
         for key, col in [('temp', t_col), ('press', p_col),
-                          ('overload', ov_col), ('max_overload', ov_col)]:
-            # находим виджет через info_frame
-            pass  # цвет применяется через StringVar — достаточно
+                         ('overload', ov_col), ('max_overload', ov_col)]:
+            pass
 
-        # Индикаторы систем
+            # Индикаторы систем
         hs = self.heat_shield[idx] > 0.5
         dr = self.drogue[idx] > 0.5
         mc = self.main_chute[idx] > 0.5
@@ -824,12 +742,12 @@ class SimulationVisualization:
         # Статус миссии
         at_end = (idx == len(self.t) - 1)
         _end_msgs = {
-            'mission_success':  ("МИССИЯ ВЫПОЛНЕНА ✓\nДавление + 30 мин науки", '#00ff88'),
-            'surface':          ("Зонд достиг глубины -500 км", '#00d4e8'),
-            'overheat':         ("АВАРИЯ: Перегрев T > 475 К", '#ff4444'),
+            'mission_success': ("МИССИЯ ВЫПОЛНЕНА ✓\nДавление + 30 мин науки", '#00ff88'),
+            'surface': ("Зонд достиг глубины -500 км", '#00d4e8'),
+            'overheat': ("АВАРИЯ: Перегрев T > 475 К", '#ff4444'),
             'pressure_failure': ("АВАРИЯ: Давление P_max", '#ff4444'),
             'overload_failure': ("АВАРИЯ: Перегрузка > G_max", '#ff4444'),
-            'time_limit':       ("Лимит времени", '#ffaa00'),
+            'time_limit': ("Лимит времени", '#ffaa00'),
         }
         if at_end:
             msg, col = _end_msgs.get(self.end_reason,
@@ -845,9 +763,6 @@ class SimulationVisualization:
                   f"Ускорение: {self.speed_mult}×"))
         self._draw(idx)
 
-    # ------------------------------------------------------------------
-    # Отрисовка реальной траектории
-    # ------------------------------------------------------------------
     def _draw(self, idx: int):
         c = self.canvas
         c.delete("all")
@@ -855,7 +770,6 @@ class SimulationVisualization:
         W = c.winfo_width() or 900
         H = c.winfo_height() or 600
 
-        # Отступы: слева под метки высоты, снизу под метки дальности
         PL, PR, PT, PB = 56, 12, 14, 30
         dw = W - PL - PR
         dh = H - PT - PB
@@ -868,15 +782,13 @@ class SimulationVisualization:
         x_lo = 0.0
         x_hi = self.x_max_km
 
-        # Масштабирование координат симуляции → пиксели холста
         def cx(xk: float) -> float:
             return PL + (xk - x_lo) / max(x_hi - x_lo, 1e-3) * dw
 
         def cy(yk: float) -> float:
-            # Высота вверх = меньший y-пиксель
+
             return PT + (1.0 - (yk - y_lo) / max(y_hi - y_lo, 1e-3)) * dh
 
-        # ── Атмосферный фон (цветные горизонтальные полосы) ──────────────
         for (a_top, a_bot, col) in self._strips:
             t_clip = min(a_top, y_hi)
             b_clip = max(a_bot, y_lo)
@@ -888,7 +800,6 @@ class SimulationVisualization:
                 c.create_rectangle(PL, py_top, W - PR, py_bot,
                                    fill=col, outline='')
 
-        # ── Облачные слои (из атмосферной модели) ────────────────────────
         for layer in atm.CLOUD_LAYERS:
             ac = layer['alt_km']
             half = layer['thickness_km'] / 2
@@ -906,7 +817,6 @@ class SimulationVisualization:
                               anchor=tk.W, fill='#aa9966',
                               font=('Consolas', 7))
 
-        # ── Горизонтальная сетка (уровни высоты) ─────────────────────────
         alt_range = y_hi - y_lo
         tick_step = (100 if alt_range > 300 else
                      50 if alt_range > 100 else
@@ -923,7 +833,6 @@ class SimulationVisualization:
                               font=('Consolas', 7))
             alt += tick_step
 
-        # Линия уровня 1 бар (alt = 0)
         py0 = cy(0.0)
         if PT <= py0 <= H - PB:
             c.create_line(PL, py0, W - PR, py0,
@@ -932,7 +841,6 @@ class SimulationVisualization:
                           anchor=tk.W, fill='#6a5820',
                           font=('Consolas', 7))
 
-        # ── Вертикальная сетка (дальность) ───────────────────────────────
         x_range = x_hi - x_lo
         xtick = (1000 if x_range > 5000 else
                  500 if x_range > 2000 else
@@ -950,14 +858,12 @@ class SimulationVisualization:
                               font=('Consolas', 7))
             xval += xtick
 
-        # Подписи осей
         c.create_text(W // 2, H - 3, text="Дальность [км]",
                       anchor=tk.S, fill='#556677', font=('Consolas', 8))
         c.create_text(8, H // 2, text="Высота [км]",
                       angle=90, anchor=tk.CENTER, fill='#556677',
                       font=('Consolas', 8))
 
-        # ── Полная траектория (тонкая пунктирная) ────────────────────────
         total = len(x_km)
         if total > 1:
             step = max(1, total // 600)
@@ -967,7 +873,6 @@ class SimulationVisualization:
             if len(pts) >= 4:
                 c.create_line(pts, fill='#1a2e50', width=1, smooth=True)
 
-        # ── Пройденная траектория (подсвечена синим) ──────────────────────
         if idx > 1:
             step = max(1, idx // 400)
             trail = []
@@ -976,11 +881,9 @@ class SimulationVisualization:
             if len(trail) >= 4:
                 c.create_line(trail, fill='#2266cc', width=2, smooth=True)
 
-        # ── Зонд + системы ───────────────────────────────────────────────
         pxp = cx(x_km[idx])
         pyp = cy(y_km[idx])
 
-        # Угол вращения иконки (по часовой стрелке на экране)
         ang = np.rad2deg(self.theta[idx])
         arad = np.deg2rad(-ang)
 
@@ -988,7 +891,6 @@ class SimulationVisualization:
             return (vx * math.cos(arad) - vy * math.sin(arad),
                     vx * math.sin(arad) + vy * math.cos(arad))
 
-        # Единичные направления носа и хвоста (в пикселях)
         nose_dx, nose_dy = math.cos(arad), math.sin(arad)
         tail_dx, tail_dy = -nose_dx, -nose_dy
 
@@ -996,7 +898,6 @@ class SimulationVisualization:
         dr_on = self.drogue[idx] > 0.5
         mc_on = self.main_chute[idx] > 0.5
 
-        # ── Основной парашют (большой, спереди хвоста) ───────────────────
         if mc_on:
             _draw_canopy(c,
                          pxp + tail_dx * 55, pyp + tail_dy * 55,
@@ -1006,7 +907,7 @@ class SimulationVisualization:
                          riser_col='#888898',
                          probe_x=pxp, probe_y=pyp)
 
-        # ── Тормозной парашют (маленький) ────────────────────────────────
+
         elif dr_on:
             _draw_canopy(c,
                          pxp + tail_dx * 30, pyp + tail_dy * 30,
@@ -1016,7 +917,6 @@ class SimulationVisualization:
                          riser_col='#606070',
                          probe_x=pxp, probe_y=pyp)
 
-        # ── Корпус зонда ─────────────────────────────────────────────────
         sz = 14
         body = [(sz, 0), (sz // 2, -sz // 2), (-sz, 0), (sz // 2, sz // 2)]
         poly = []
@@ -1025,7 +925,6 @@ class SimulationVisualization:
             poly += [pxp + rx, pyp + ry]
         c.create_polygon(poly, fill='#b0bcc8', outline='#d8e0e8', width=1)
 
-        # ── Тепловой щит (нос) ───────────────────────────────────────────
         if hs_on:
             shield_verts = [(sz, 0), (sz // 2, -sz // 3), (sz // 2, sz // 3)]
             spoly = []
@@ -1036,7 +935,6 @@ class SimulationVisualization:
                      '#aa5500' if self.v[idx] > 1000 else '#884422')
             c.create_polygon(spoly, fill=shcol, outline='#ff7722', width=1)
 
-            # Плазменный след при высокой скорости
             if self.v[idx] > 1500:
                 trail_len = min(90, int(self.v[idx] / 350))
                 for k in range(trail_len):
@@ -1044,14 +942,13 @@ class SimulationVisualization:
                     r_t = int(min(255, 160 + self.v[idx] / 300) * alpha_f)
                     g_t = int(40 * alpha_f)
                     trail_hex = f'#{r_t:02x}{g_t:02x}00'
-                    # след тянется от носа в хвостовом направлении
+
                     tx = pxp + tail_dx * (sz + k)
                     ty = pyp + tail_dy * (sz + k)
                     rr = max(1, int(4 * alpha_f))
                     c.create_oval(tx - rr, ty - rr, tx + rr, ty + rr,
                                   fill=trail_hex, outline='')
 
-            # Плазменное свечение вокруг носа
             if self.v[idx] > 5000:
                 ni = min(220, int(self.v[idx] / 160))
                 ng = int(ni * 0.20)
@@ -1061,7 +958,6 @@ class SimulationVisualization:
                 c.create_oval(nxp - r_g, nyp - r_g, nxp + r_g, nyp + r_g,
                               fill=f'#{ni:02x}{ng:02x}00', outline='')
 
-        # ── Надписи рядом с зондом ────────────────────────────────────────
         v_kms = self.v[idx] / 1000.0
         vcol = ('#00cc44' if v_kms < 5 else
                 '#ffaa00' if v_kms < 15 else '#ff4444')
@@ -1072,12 +968,10 @@ class SimulationVisualization:
                       text=f"θ = {ang:.1f}°",
                       fill='#7788aa', font=('Consolas', 8))
 
-        # Вибрация при высокой перегрузке
         if self.overload[idx] > 8:
             shake = np.random.randint(-2, 3)
             c.move("all", shake, 0)
 
-        # ── HUD: Высота и дальность ───────────────────────────────────────
         c.create_rectangle(PL + 2, PT + 2, PL + 230, PT + 40,
                            fill='#0a0a14', outline='#1e2a3a')
         c.create_text(PL + 10, PT + 8,
@@ -1089,7 +983,6 @@ class SimulationVisualization:
                       anchor=tk.NW, fill='#8899aa',
                       font=('Consolas', 9))
 
-        # ── Оверлей результата миссии (показывается на последнем кадре) ──
         if idx == len(self.t) - 1:
             _SUCCESS = {'mission_success'}
             _FAILURE = {'overheat', 'pressure_failure', 'overload_failure'}
@@ -1107,9 +1000,6 @@ class SimulationVisualization:
                           text=banner_txt,
                           fill=banner_col, font=('Consolas', 16, 'bold'))
 
-    # ------------------------------------------------------------------
-    # Ручное управление парашютами
-    # ------------------------------------------------------------------
     def _manual_deploy(self, system: str):
         """Ручное раскрытие парашюта: фиксируем время и пересчитываем траекторию."""
         if self._recalculating:
@@ -1118,7 +1008,7 @@ class SimulationVisualization:
 
         if system == 'drogue':
             if self._manual_drogue_t is not None:
-                return  # уже раскрыт вручную
+                return
             self._manual_drogue_t = t_now
             self._btn_drogue.config(state=tk.DISABLED,
                                     text=f"▼  ТОРМ. ПАР. @ {t_now:.1f} с",
@@ -1140,7 +1030,6 @@ class SimulationVisualization:
             text="Режим: РУЧНОЙ\n" + ("  " + ", ".join(mode_parts) if mode_parts else ""),
             fg='#e94560')
 
-        # Пауза + пересчёт
         was_running = self.animation_running
         self.animation_running = False
         self._recalculating = True
@@ -1166,7 +1055,7 @@ class SimulationVisualization:
                                 text="🛡  СБРОС ТЕПЛОЗАЩИТЫ",
                                 bg='#2e1a0a', fg='#664400')
         self._lbl_manual_status.config(text="Режим: АВТО", fg='#556677')
-        # Пересчёт с авто-параметрами
+
         was_running = self.animation_running
         self.animation_running = False
         self._recalculating = True
@@ -1194,24 +1083,24 @@ class SimulationVisualization:
     def _show_mission_result(self):
         """Диалог с результатом миссии по окончании симуляции."""
         _msgs = {
-            'mission_success':  ("МИССИЯ ВЫПОЛНЕНА",
-                                 "Зонд достиг целевого давления\n"
-                                 "и передал научные данные (30 мин).\n\n"
-                                 "Миссия завершена успешно!"),
-            'overheat':         ("МИССИЯ ПРОВАЛЕНА",
-                                 "Температура превысила 475 К.\n"
-                                 "Зонд перегрелся и вышел из строя."),
+            'mission_success': ("МИССИЯ ВЫПОЛНЕНА",
+                                "Зонд достиг целевого давления\n"
+                                "и передал научные данные (30 мин).\n\n"
+                                "Миссия завершена успешно!"),
+            'overheat': ("МИССИЯ ПРОВАЛЕНА",
+                         "Температура превысила 475 К.\n"
+                         "Зонд перегрелся и вышел из строя."),
             'pressure_failure': ("МИССИЯ ПРОВАЛЕНА",
                                  "Давление превысило максимально допустимое.\n"
                                  "Зонд разрушен внешним давлением."),
             'overload_failure': ("МИССИЯ ПРОВАЛЕНА",
                                  "Перегрузка превысила максимально допустимую.\n"
                                  "Конструкция зонда разрушена."),
-            'time_limit':       ("СИМУЛЯЦИЯ ОСТАНОВЛЕНА",
-                                 "Достигнут лимит времени симуляции.\n"
-                                 "Миссия не завершена."),
-            'surface':          ("СИМУЛЯЦИЯ ОСТАНОВЛЕНА",
-                                 "Зонд достиг глубины -500 км."),
+            'time_limit': ("СИМУЛЯЦИЯ ОСТАНОВЛЕНА",
+                           "Достигнут лимит времени симуляции.\n"
+                           "Миссия не завершена."),
+            'surface': ("СИМУЛЯЦИЯ ОСТАНОВЛЕНА",
+                        "Зонд достиг глубины -500 км."),
         }
         title, msg = _msgs.get(self.end_reason,
                                ("МИССИЯ ЗАВЕРШЕНА", self.end_reason))
@@ -1296,7 +1185,6 @@ class SimulationVisualization:
         self.x_max_km = max(float(np.max(self.x)) / 1000.0, 1.0)
         self._strips = _build_atm_strips(self.y_min_km, self.y_max_km)
 
-        # Обновить пределы ползунка
         self.slider.config(to=max(1, len(self.t) - 1))
         self.current_frame = min(keep_frame, len(self.t) - 1)
 
@@ -1364,9 +1252,6 @@ class SimulationVisualization:
         self._refresh()
 
 
-# ============================================
-# ГЛАВНОЕ ОКНО — ПАРАМЕТРЫ + ГРАФИКИ
-# ============================================
 class SaturnDescentApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -1374,7 +1259,6 @@ class SaturnDescentApp:
         self.root.geometry("1440x900")
         self.root.configure(bg='#0f0f1a')
 
-        # Тёмная тема ttk
         style = ttk.Style()
         style.theme_use('clam')
         style.configure('TLabelframe',
@@ -1397,7 +1281,6 @@ class SaturnDescentApp:
                   foreground=[('active', '#00d4e8')])
         style.configure('TFrame', background='#0f0f1a')
 
-        # Левая панель: параметры (прокручиваемая)
         _left_outer = ttk.LabelFrame(root, text="Параметры зонда")
         _left_outer.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
@@ -1426,7 +1309,6 @@ class SaturnDescentApp:
         _left_canvas.bind('<MouseWheel>', _on_left_mw)
         left.bind('<MouseWheel>', _on_left_mw)
 
-        # Правая панель: графики
         right = ttk.Frame(root)
         right.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
@@ -1436,7 +1318,6 @@ class SaturnDescentApp:
         self.sim_results: tuple | None = None
         self.sim_params: dict | None = None
 
-    # ------------------------------------------------------------------
     def _lbl_entry(self, parent, text: str, default) -> ttk.Entry:
         ttk.Label(parent, text=text).pack(anchor=tk.W, pady=(8, 0))
         e = ttk.Entry(parent)
@@ -1510,7 +1391,6 @@ class SaturnDescentApp:
         self.plot_canvas = FigureCanvasTkAgg(self.fig, master=parent)
         self.plot_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-    # ------------------------------------------------------------------
     def _run(self):
         try:
             mass = float(self.e_mass.get())
@@ -1582,18 +1462,18 @@ class SaturnDescentApp:
         y_end = arrays[1][-1] / 1000.0
         x_end = arrays[4][-1] / 1000.0
         _reason_ru = {
-            'mission_success':  'МИССИЯ ВЫПОЛНЕНА ✓',
-            'surface':          'Глубина -500 км',
-            'overheat':         'АВАРИЯ: T > 475 К',
+            'mission_success': 'МИССИЯ ВЫПОЛНЕНА ✓',
+            'surface': 'Глубина -500 км',
+            'overheat': 'АВАРИЯ: T > 475 К',
             'pressure_failure': 'АВАРИЯ: P > P_max',
             'overload_failure': 'АВАРИЯ: G > G_max',
-            'time_limit':       'Лимит времени',
+            'time_limit': 'Лимит времени',
         }
         reason_txt = _reason_ru.get(end_reason, end_reason)
         _fail = {'overheat', 'pressure_failure', 'overload_failure'}
         status_col = ('#00ff88' if end_reason == 'mission_success'
                       else '#ff4444' if end_reason in _fail
-                      else '#00d4e8')
+        else '#00d4e8')
         self.lbl_status.config(
             text=(f"Готово ✓\n"
                   f"t={t_end:.0f} с\n"
@@ -1602,7 +1482,6 @@ class SaturnDescentApp:
                   f"{reason_txt}"),
             foreground=status_col)
 
-    # ------------------------------------------------------------------
     def _update_plots(self, res):
         arrays, _end_reason = res
         (t, y, v, theta, x, q, overload,
@@ -1641,7 +1520,6 @@ class SaturnDescentApp:
            f'Тепловой поток  (макс: {np.max(q) / 1e6:.2f})', colors[5])
         axes[1, 2].set_yscale('log')
 
-        # Отмечаем максимум перегрузки
         imax = int(np.argmax(overload))
         axes[1, 1].axvline(t[imax], color='#ff4444', linewidth=0.8, linestyle='--')
         axes[1, 1].annotate(f"  {np.max(overload):.1f} g",
@@ -1651,7 +1529,6 @@ class SaturnDescentApp:
         self.fig.tight_layout(pad=1.5)
         self.plot_canvas.draw()
 
-    # ------------------------------------------------------------------
     def _open_viz(self):
         if self.sim_results and self.sim_params:
             SimulationVisualization(self.root, self.sim_results, self.sim_params)
@@ -1660,9 +1537,6 @@ class SaturnDescentApp:
                                    "Сначала выполните расчёт")
 
 
-# ============================================
-# ТОЧКА ВХОДА
-# ============================================
 if __name__ == "__main__":
     root = tk.Tk()
     SaturnDescentApp(root)
